@@ -54,14 +54,14 @@ const AppSidebar = ({ isOpen, onClose, isLoggedIn = false }: AppSidebarProps) =>
                 onClose();
             }
         },
-        {
-            icon: Play,
-            title: 'Game History',
-            onClick: () => {
-                navigate('/game-history');
-                onClose();
-            }
-        },
+        // {
+        //     icon: Play,
+        //     title: 'Game History',
+        //     onClick: () => {
+        //         navigate('/game-history');
+        //         onClose();
+        //     }
+        // },
         {
             icon: MessageSquare,
             title: 'Support',
@@ -189,5 +189,6 @@ const AppSidebar = ({ isOpen, onClose, isLoggedIn = false }: AppSidebarProps) =>
         </>
     );
 };
+
 
 export default AppSidebar;
