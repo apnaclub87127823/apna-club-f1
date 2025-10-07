@@ -9,10 +9,11 @@ import { useToast } from '@/hooks/use-toast';
 import { getAuthToken } from '@/lib/auth';
 import { useWallet } from '@/hooks/useWallet';
 import { apiService } from '@/lib/api';
+import { useProfile } from '@/hooks/useProfile';
 
 const depositSchema = z.object({
     amount: z.number()
-        .min(1, "Minimum deposit amount is ₹1")
+        .min(100, "Minimum deposit amount is ₹100")
         .max(20000, "Maximum deposit amount is ₹20,000")
 });
 
@@ -20,6 +21,7 @@ const DepositMoney = () => {
     const navigate = useNavigate();
     const { toast } = useToast();
     const { refetch: refetchWallet } = useWallet();
+    const { profile } = useProfile();
     const [searchParams] = useSearchParams();
     const [amount, setAmount] = useState('');
     const [error, setError] = useState('');
@@ -164,6 +166,16 @@ const DepositMoney = () => {
                     description: "You will be redirected to complete the payment.",
                 });
 
+                // If amount > 500, send WhatsApp message to admin
+                if (validatedData.amount > 500 && profile) {
+                    const adminNumber = '917014079906'; // +91 70140 79906
+                    const message = `My name is ${profile.fullName} and mobile number is ${profile.mobileNumber}. I want to add ₹${validatedData.amount} in this number.`;
+                    const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodeURIComponent(message)}`;
+                    
+                    // Open WhatsApp in new tab
+                    window.open(whatsappUrl, '_blank');
+                }
+
                 // Redirect to payment URL
                 window.location.href = data.data.paymentUrl;
             } else {
@@ -295,7 +307,7 @@ const DepositMoney = () => {
                                 </div>
 
                                 <div className="flex justify-between text-xs text-muted-foreground">
-                                    <span>Minimum: ₹1</span>
+                                    <span>Minimum: ₹100</span>
                                     <span>Maximum: ₹20,000</span>
                                 </div>
 
@@ -322,7 +334,7 @@ const DepositMoney = () => {
 
                             <Button
                                 type="submit"
-                                disabled={isSubmitting || isVerifying || !amount || parseInt(amount) < 1 || parseInt(amount) > 20000}
+                                disabled={isSubmitting || isVerifying || !amount || parseInt(amount) < 100 || parseInt(amount) > 20000}
                                 className="w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-md font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {isSubmitting ? (

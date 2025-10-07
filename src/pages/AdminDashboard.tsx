@@ -80,6 +80,13 @@ interface Dispute {
     verifiedAt?: string;
 }
 
+interface UserData {
+    _id: string;
+    fullName: string;
+    username: string;
+    mobileNumber: string;
+}
+
 const AdminDashboard = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -98,6 +105,11 @@ const AdminDashboard = () => {
     const [selectedWinnerId, setSelectedWinnerId] = useState<string>('');
     const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
     const [screenshotModal, setScreenshotModal] = useState<{ isOpen: boolean, url: string, userName: string }>({ isOpen: false, url: '', userName: '' });
+    const [users, setUsers] = useState<UserData[]>([]);
+    const [selectedUserId, setSelectedUserId] = useState<string>('');
+    const [depositAmount, setDepositAmount] = useState<string>('');
+    const [addingBalance, setAddingBalance] = useState(false);
+    const [userSearch, setUserSearch] = useState<string>('');
 
     useEffect(() => {
         // Check if user is admin
@@ -134,6 +146,11 @@ const AdminDashboard = () => {
                 const disputesResponse = await adminApiService.getAllDisputes(token, disputeStatusFilter as any, 1, 20);
                 if (disputesResponse.success && disputesResponse.data) {
                     setDisputes(disputesResponse.data.disputes);
+                }
+            } else if (activeTab === 'add-balance') {
+                const usersResponse = await adminApiService.getAllUsers(token);
+                if (usersResponse.success && usersResponse.data) {
+                    setUsers(usersResponse.data);
                 }
             }
         } catch (error) {
@@ -232,6 +249,35 @@ const AdminDashboard = () => {
 
     const openScreenshotModal = (url: string, userName: string) => {
         setScreenshotModal({ isOpen: true, url, userName });
+    };
+
+    const handleAddBalance = async () => {
+        if (!selectedUserId || !depositAmount || parseFloat(depositAmount) <= 0) {
+            toast.error('Please select a user and enter a valid amount');
+            return;
+        }
+
+        const token = getAuthToken();
+        if (!token) return;
+
+        try {
+            setAddingBalance(true);
+            const response = await adminApiService.addDepositFundsToUser(
+                token,
+                selectedUserId,
+                parseFloat(depositAmount)
+            );
+
+            if (response.success) {
+                toast.success(response.message);
+                setSelectedUserId('');
+                setDepositAmount('');
+            }
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to add balance');
+        } finally {
+            setAddingBalance(false);
+        }
     };
 
     // Group disputes by roomId
@@ -348,7 +394,7 @@ const AdminDashboard = () => {
 
                 {/* Tabs for Withdrawals, Rooms, and Disputes */}
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                    <TabsList className="grid w-full grid-cols-2">
+                    <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="withdrawals" className="gap-2">
                             <IndianRupee className="h-4 w-4" />
                             Withdrawals
@@ -356,6 +402,10 @@ const AdminDashboard = () => {
                         <TabsTrigger value="disputes" className="gap-2">
                             <AlertTriangle className="h-4 w-4" />
                             Disputes
+                        </TabsTrigger>
+                        <TabsTrigger value="add-balance" className="gap-2">
+                            <Users className="h-4 w-4" />
+                            Add Balance
                         </TabsTrigger>
                     </TabsList>
 
@@ -727,6 +777,92 @@ const AdminDashboard = () => {
                                             );
                                         })}
                                     </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* Add Balance Tab */}
+                    <TabsContent value="add-balance">
+                        <Card>
+                            <CardHeader className="p-3 lg:p-6">
+                                <CardTitle className="text-base lg:text-lg">Add Balance to User</CardTitle>
+                                <CardDescription className="text-xs lg:text-sm">
+                                    Manually add deposit balance to user accounts
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-3 lg:p-6 space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Search User</label>
+                                    <Input
+                                        type="text"
+                                        placeholder="Search by name, username, or mobile number..."
+                                        value={userSearch}
+                                        onChange={(e) => setUserSearch(e.target.value)}
+                                        className="w-full"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Select User</label>
+                                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Choose a user..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {users
+                                                .filter(user => {
+                                                    if (!userSearch) return true;
+                                                    const search = userSearch.toLowerCase();
+                                                    return (
+                                                        user.fullName.toLowerCase().includes(search) ||
+                                                        user.username.toLowerCase().includes(search) ||
+                                                        user.mobileNumber.includes(search)
+                                                    );
+                                                })
+                                                .map((user) => (
+                                                    <SelectItem key={user._id} value={user._id}>
+                                                        {user.fullName} (@{user.username}) - {user.mobileNumber}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Amount (₹)</label>
+                                    <Input
+                                        type="number"
+                                        placeholder="Enter amount"
+                                        value={depositAmount}
+                                        onChange={(e) => setDepositAmount(e.target.value)}
+                                        min="1"
+                                        step="1"
+                                    />
+                                </div>
+
+                                <Button
+                                    onClick={handleAddBalance}
+                                    disabled={addingBalance || !selectedUserId || !depositAmount}
+                                    className="w-full"
+                                >
+                                    {addingBalance ? (
+                                        <>
+                                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                            Adding Balance...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <IndianRupee className="h-4 w-4 mr-2" />
+                                            Add Balance
+                                        </>
+                                    )}
+                                </Button>
+
+                                {users.length === 0 && !loading && (
+                                    <p className="text-center text-muted-foreground text-sm py-4">
+                                        No users found
+                                    </p>
                                 )}
                             </CardContent>
                         </Card>

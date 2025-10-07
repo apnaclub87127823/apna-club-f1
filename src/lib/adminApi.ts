@@ -319,6 +319,34 @@ class AdminApiService {
             body: JSON.stringify({ roomId, winnerUserId, adminNotes }),
         });
     }
+
+    // Get all users
+    async getAllUsers(token: string): Promise<ApiResponse<Array<{
+        _id: string;
+        fullName: string;
+        username: string;
+        mobileNumber: string;
+    }>>> {
+        return this.request('/api/admin/users', token, {
+            method: 'GET',
+        });
+    }
+
+    // Add deposit funds to user
+    async addDepositFundsToUser(
+        token: string,
+        userId: string,
+        amount: number
+    ): Promise<ApiResponse<{
+        userId: string;
+        newDepositBalance: number;
+        newTotalBalance: number;
+    }>> {
+        return this.request('/api/admin/add-deposit-funds', token, {
+            method: 'POST',
+            body: JSON.stringify({ userId, amount }),
+        });
+    }
 }
 
 export const adminApiService = new AdminApiService();
