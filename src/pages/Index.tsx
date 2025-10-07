@@ -23,7 +23,7 @@ const Index = () => {
             <p className="text-muted-foreground">Join over a million active players</p>
             <div className="space-y-3">
               <Button
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/signup')}
                 className="w-full"
                 size="lg"
               >
@@ -165,5 +165,6 @@ const Index = () => {
 };
 
 export default Index;
+
 
 // nk
