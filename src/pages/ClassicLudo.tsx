@@ -789,7 +789,7 @@ const ClassicLudo = () => {
                             </div>
                         ) : (
                             openBattles.map((battle) => {
-                                const prize = battle.totalPrizePool * 1.90; // 95% of total prize pool
+                                const prize = battle.totalPrizePool * 0.95; // 95% of total prize pool
                                 const isUserInRoom = userRoomIds.includes(battle.roomId);
 
                                 return (
@@ -855,7 +855,7 @@ const ClassicLudo = () => {
                             </div>
                         ) : (
                             runningBattles.map((battle) => {
-                                const prize = battle.totalPrizePool * 1.90; // Winner gets 95% of total pool (5% platform fee)
+                                const prize = battle.totalPrizePool * 0.95; // Winner gets 95% of total pool (5% platform fee)
                                 const player1 = battle.players?.[0];
                                 const player2 = battle.players?.[1];
                                 const isUserInRoom = userRoomIds.includes(battle.roomId);
