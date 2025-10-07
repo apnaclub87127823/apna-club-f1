@@ -745,9 +745,6 @@ const ClassicLudo = () => {
                                                     <div className="text-xs text-gray-600">
                                                         Ludo Username: {player.ludoUsername}
                                                     </div>
-                                                    <div className="text-xs text-gray-500">
-                                                        Mobile: {player.mobileNumber}
-                                                    </div>
                                                 </div>
 
                                                 <div className="flex gap-2 ml-2">
@@ -789,7 +786,7 @@ const ClassicLudo = () => {
                             </div>
                         ) : (
                             openBattles.map((battle) => {
-                                const prize = battle.totalPrizePool * 0.95; // 95% of total prize pool
+                                const prize = battle.betAmount * 1.90; // Winning amount (2 players × entry fee - 5% platform fee)
                                 const isUserInRoom = userRoomIds.includes(battle.roomId);
 
                                 return (
@@ -855,7 +852,7 @@ const ClassicLudo = () => {
                             </div>
                         ) : (
                             runningBattles.map((battle) => {
-                                const prize = battle.totalPrizePool * 0.95; // Winner gets 95% of total pool (5% platform fee)
+                                const prize = battle.betAmount * 1.90; // Winning amount (2 players × entry fee - 5% platform fee)
                                 const player1 = battle.players?.[0];
                                 const player2 = battle.players?.[1];
                                 const isUserInRoom = userRoomIds.includes(battle.roomId);
