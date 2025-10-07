@@ -11,7 +11,7 @@ const ReferEarn = () => {
 
     const referralCode = profile?.referCode || '';
     const referralEarning = profile?.referralEarning || 0;
-    const totalReferrals = Math.floor(referralEarning / 20); // Assuming ₹20 per referral
+    const totalReferrals = 0; // Total referrals count (to be tracked by backend)
 
     const handleCopyCode = () => {
         navigator.clipboard.writeText(referralCode);
@@ -51,13 +51,13 @@ const ReferEarn = () => {
                                 <Gift className="h-6 w-6 text-white" />
                             </div>
                             <div>
-                                <p className="text-white/90 text-xs font-medium">Earn Per Referral</p>
-                                <p className="text-white text-2xl font-bold">₹20</p>
+                                <p className="text-white/90 text-xs font-medium">Commission Rate</p>
+                                <p className="text-white text-2xl font-bold">2%</p>
                             </div>
                         </div>
                         <div className="text-white/90 text-sm">
-                            <p className="text-xs">Instant Credit</p>
-                            <p className="font-semibold">To Wallet</p>
+                            <p className="text-xs">On Every</p>
+                            <p className="font-semibold">Winning Match</p>
                         </div>
                     </div>
                 </div>
@@ -76,7 +76,7 @@ const ReferEarn = () => {
                     <div className="bg-card border rounded-lg p-3 shadow-sm">
                         <div className="flex items-center justify-between mb-1">
                             <Wallet className="h-4 w-4 text-primary" />
-                            <span className="text-xs text-green-500 font-medium">+₹20</span>
+                            <span className="text-xs text-green-500 font-medium">2%</span>
                         </div>
                         <p className="text-xs text-muted-foreground">Total Earned</p>
                         <p className="text-xl font-bold text-foreground">₹{referralEarning}</p>
@@ -151,13 +151,13 @@ const ReferEarn = () => {
                         <div className="flex items-start gap-2">
                             <span className="text-xs font-bold text-primary mt-0.5">2.</span>
                             <p className="text-xs text-muted-foreground">
-                                Get <span className="font-semibold text-foreground">₹20 instantly</span> when they sign up
+                                When they sign up using your code
                             </p>
                         </div>
                         <div className="flex items-start gap-2">
                             <span className="text-xs font-bold text-primary mt-0.5">3.</span>
                             <p className="text-xs text-muted-foreground">
-                                Earn <span className="font-semibold text-foreground">1% commission</span> on their winnings
+                                Earn <span className="font-semibold text-foreground">2% commission</span> on every winning match amount
                             </p>
                         </div>
                     </div>
