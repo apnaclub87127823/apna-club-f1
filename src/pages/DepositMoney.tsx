@@ -151,30 +151,39 @@ const DepositMoney = () => {
                 return;
             }
 
+            // For amounts > 500, only send WhatsApp message (no payment API)
+            if (validatedData.amount > 500 && profile) {
+                const adminNumber = '917014079906'; // +91 70140 79906
+                const message = `My name is ${profile.fullName} and mobile number is ${profile.mobileNumber}. I want to add ₹${validatedData.amount} in this number.`;
+                const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodeURIComponent(message)}`;
+
+                toast({
+                    title: "Request Sent",
+                    description: "Please contact admin on WhatsApp to complete your deposit.",
+                });
+
+                // Open WhatsApp
+                window.open(whatsappUrl, '_blank');
+
+                // Redirect back to wallet after a short delay
+                setTimeout(() => {
+                    navigate('/wallet');
+                }, 2000);
+
+                return;
+            }
+
             console.log('Making deposit API call with amount:', validatedData.amount);
 
-            // Make API call
+            // For amounts <= 500, make API call
             const data = await apiService.deposit(token, validatedData.amount);
             console.log('Deposit API response:', data);
 
             if (data.success && data.data) {
-                // Store order ID and redirect to payment
-                const orderId = data.data.orderId;
-
                 toast({
                     title: "Redirecting to Payment",
                     description: "You will be redirected to complete the payment.",
                 });
-
-                // If amount > 500, send WhatsApp message to admin
-                if (validatedData.amount > 500 && profile) {
-                    const adminNumber = '917014079906'; // +91 70140 79906
-                    const message = `My name is ${profile.fullName} and mobile number is ${profile.mobileNumber}. I want to add ₹${validatedData.amount} in this number.`;
-                    const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodeURIComponent(message)}`;
-                    
-                    // Open WhatsApp in new tab
-                    window.open(whatsappUrl, '_blank');
-                }
 
                 // Redirect to payment URL
                 window.location.href = data.data.paymentUrl;
