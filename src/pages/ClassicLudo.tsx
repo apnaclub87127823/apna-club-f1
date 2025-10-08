@@ -1004,9 +1004,24 @@ const ClassicLudo = () => {
 
                         {claimType === 'win' && (
                             <div>
-                                <label className="block text-sm font-medium mb-2">
-                                    Upload Screenshot <span className="text-red-500">*</span>
-                                </label>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="block text-sm font-medium">
+                                        Upload Screenshot <span className="text-red-500">*</span>
+                                    </label>
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => {
+                                            if (!selectedClaimRoom) return;
+                                            setRoomToCancel(selectedClaimRoom.roomId);
+                                            setShowCancelDialog(true);
+                                        }}
+                                        disabled={claimLoading || cancellingRoom === selectedClaimRoom?.roomId}
+                                        className="bg-red-600 hover:bg-red-700"
+                                    >
+                                        {cancellingRoom === selectedClaimRoom?.roomId ? 'Cancelling...' : 'Cancel Room'}
+                                    </Button>
+                                </div>
                                 <Input
                                     type="file"
                                     accept="image/*"
@@ -1025,48 +1040,47 @@ const ClassicLudo = () => {
                         )}
 
                         {claimType === 'loss' && (
-                            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3">
-                                <p className="text-sm text-yellow-800">
-                                    ⚠️ By accepting loss, you confirm that you lost this game. This action cannot be undone.
-                                </p>
-                            </div>
+                            <>
+                                <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3">
+                                    <p className="text-sm text-yellow-800">
+                                        ⚠️ By accepting loss, you confirm that you lost this game. This action cannot be undone.
+                                    </p>
+                                </div>
+                                <Button
+                                    variant="destructive"
+                                    onClick={() => {
+                                        if (!selectedClaimRoom) return;
+                                        setRoomToCancel(selectedClaimRoom.roomId);
+                                        setShowCancelDialog(true);
+                                    }}
+                                    disabled={claimLoading || cancellingRoom === selectedClaimRoom?.roomId}
+                                    className="bg-red-600 hover:bg-red-700 w-full"
+                                >
+                                    {cancellingRoom === selectedClaimRoom?.roomId ? 'Cancelling...' : 'Cancel Room'}
+                                </Button>
+                            </>
                         )}
 
-                        <div className="flex gap-2 justify-between">
+                        <div className="flex gap-2 justify-end">
                             <Button
-                                variant="destructive"
+                                variant="outline"
                                 onClick={() => {
-                                    if (!selectedClaimRoom) return;
-                                    setRoomToCancel(selectedClaimRoom.roomId);
-                                    setShowCancelDialog(true);
+                                    setShowClaimDialog(false);
+                                    setSelectedClaimRoom(null);
+                                    setClaimUsername('');
+                                    setScreenshot(null);
                                 }}
-                                disabled={claimLoading || cancellingRoom === selectedClaimRoom?.roomId}
-                                className="bg-red-600 hover:bg-red-700"
+                                disabled={claimLoading}
                             >
-                                {cancellingRoom === selectedClaimRoom?.roomId ? 'Cancelling...' : 'Cancel Room'}
+                                Close
                             </Button>
-
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => {
-                                        setShowClaimDialog(false);
-                                        setSelectedClaimRoom(null);
-                                        setClaimUsername('');
-                                        setScreenshot(null);
-                                    }}
-                                    disabled={claimLoading}
-                                >
-                                    Close
-                                </Button>
-                                <Button
-                                    onClick={handleConfirmClaimResult}
-                                    disabled={claimLoading || !claimUsername.trim() || (claimType === 'win' && !screenshot)}
-                                    className="bg-green-600 hover:bg-green-700"
-                                >
-                                    {claimLoading ? 'Submitting...' : 'Submit Result'}
-                                </Button>
-                            </div>
+                            <Button
+                                onClick={handleConfirmClaimResult}
+                                disabled={claimLoading || !claimUsername.trim() || (claimType === 'win' && !screenshot)}
+                                className="bg-green-600 hover:bg-green-700"
+                            >
+                                {claimLoading ? 'Submitting...' : 'Submit Result'}
+                            </Button>
                         </div>
                     </div>
                 </DialogContent>
