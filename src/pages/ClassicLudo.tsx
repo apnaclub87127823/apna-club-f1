@@ -507,6 +507,34 @@ const ClassicLudo = () => {
         }
     };
 
+    const handleRequestMutualCancellation = async (roomId: string) => {
+        setCancellingRoom(roomId);
+        try {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const response = await apiService.requestMutualCancellation(token, roomId);
+            if (response.success) {
+                toast({
+                    title: "Cancellation Request",
+                    description: response.message,
+                });
+
+                await fetchRooms();
+                await fetchUserRooms();
+                await refetchWallet();
+            }
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message || "Failed to request cancellation",
+                variant: "destructive",
+            });
+        } finally {
+            setCancellingRoom(null);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-background">
             <Header isLoggedIn={isAuthenticated} showTermsButton={false} showScrollingBanners={false} />
@@ -1019,7 +1047,7 @@ const ClassicLudo = () => {
                                         disabled={claimLoading || cancellingRoom === selectedClaimRoom?.roomId}
                                         className="bg-red-600 hover:bg-red-700"
                                     >
-                                        {cancellingRoom === selectedClaimRoom?.roomId ? 'Cancelling...' : 'Cancel Room'}
+                                        {cancellingRoom === selectedClaimRoom?.roomId ? 'Requesting...' : 'Cancel Room'}
                                     </Button>
                                 </div>
                                 <Input
@@ -1056,7 +1084,7 @@ const ClassicLudo = () => {
                                     disabled={claimLoading || cancellingRoom === selectedClaimRoom?.roomId}
                                     className="bg-red-600 hover:bg-red-700 w-full"
                                 >
-                                    {cancellingRoom === selectedClaimRoom?.roomId ? 'Cancelling...' : 'Cancel Room'}
+                                    {cancellingRoom === selectedClaimRoom?.roomId ? 'Requesting...' : 'Cancel Room'}
                                 </Button>
                             </>
                         )}
@@ -1090,9 +1118,9 @@ const ClassicLudo = () => {
             <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
                 <DialogContent className="bg-white text-black border-gray-300 shadow-xl">
                     <DialogHeader>
-                        <DialogTitle className="text-xl font-bold text-black">Cancel Room</DialogTitle>
+                        <DialogTitle className="text-xl font-bold text-black">Request Cancellation</DialogTitle>
                         <DialogDescription className="text-gray-700">
-                            Are you sure you want to cancel this room? The bet amount will be refunded to all players.
+                            Request mutual cancellation of this room. Both players must agree for the refund to process.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -1127,7 +1155,10 @@ const ClassicLudo = () => {
                                 variant="destructive"
                                 onClick={async () => {
                                     if (!roomToCancel) return;
-                                    await handleCancelRoom(roomToCancel, cancelReason || undefined);
+                                    await handleRequestMutualCancellation(roomToCancel);
+                                    setShowCancelDialog(false);
+                                    setCancelReason('');
+                                    setRoomToCancel(null);
                                     setShowClaimDialog(false);
                                     setSelectedClaimRoom(null);
                                     setClaimUsername('');
@@ -1136,7 +1167,7 @@ const ClassicLudo = () => {
                                 disabled={cancellingRoom !== null}
                                 className="bg-red-600 hover:bg-red-700 text-white"
                             >
-                                {cancellingRoom ? 'Cancelling...' : 'Cancel Room'}
+                                {cancellingRoom ? 'Requesting...' : 'Request Cancellation'}
                             </Button>
                         </div>
                     </div>
