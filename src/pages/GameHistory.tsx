@@ -58,6 +58,7 @@ const GameHistory = () => {
     const [screenshot, setScreenshot] = useState<File | null>(null);
     const [claimUsername, setClaimUsername] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [cancellingRoom, setCancellingRoom] = useState<string | null>(null);
 
     const fetchFinishedGames = async () => {
         setLoading(true);
@@ -92,6 +93,33 @@ const GameHistory = () => {
     useEffect(() => {
         fetchFinishedGames();
     }, []);
+
+    const handleCancelRoom = async (roomId: string) => {
+        setCancellingRoom(roomId);
+        try {
+            const token = getAuthToken();
+            if (!token) return;
+
+            const response = await apiService.cancelRoom(token, roomId);
+            if (response.success) {
+                toast({
+                    title: "Room Cancelled",
+                    description: response.message || "Room cancelled successfully and amount refunded",
+                });
+
+                // Refresh the game list
+                fetchFinishedGames();
+            }
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.message || "Failed to cancel room",
+                variant: "destructive",
+            });
+        } finally {
+            setCancellingRoom(null);
+        }
+    };
 
     const handleScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -376,26 +404,47 @@ const GameHistory = () => {
                             </p>
                         </div>
 
-                        <div className="flex gap-2 justify-end">
+                        <div className="flex gap-2 justify-between">
                             <Button
-                                variant="outline"
-                                onClick={() => {
-                                    setClaimDialogOpen(false);
-                                    setSelectedGame(null);
-                                    setClaimUsername('');
-                                    setScreenshot(null);
+                                variant="destructive"
+                                onClick={async () => {
+                                    if (!selectedGame) return;
+
+                                    if (window.confirm('Are you sure you want to cancel this room? The bet amount will be refunded to all players.')) {
+                                        await handleCancelRoom(selectedGame.roomId);
+                                        setClaimDialogOpen(false);
+                                        setSelectedGame(null);
+                                        setClaimUsername('');
+                                        setScreenshot(null);
+                                    }
                                 }}
-                                disabled={submitting}
+                                disabled={submitting || cancellingRoom === selectedGame?.roomId}
+                                className="bg-red-600 hover:bg-red-700"
                             >
-                                Cancel
+                                {cancellingRoom === selectedGame?.roomId ? 'Cancelling...' : 'Cancel Room'}
                             </Button>
-                            <Button
-                                onClick={submitClaim}
-                                disabled={submitting || !claimUsername.trim() || !screenshot}
-                                className="bg-green-600 hover:bg-green-700"
-                            >
-                                {submitting ? 'Submitting...' : 'Submit Result'}
-                            </Button>
+
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setClaimDialogOpen(false);
+                                        setSelectedGame(null);
+                                        setClaimUsername('');
+                                        setScreenshot(null);
+                                    }}
+                                    disabled={submitting}
+                                >
+                                    Close
+                                </Button>
+                                <Button
+                                    onClick={submitClaim}
+                                    disabled={submitting || !claimUsername.trim() || !screenshot}
+                                    className="bg-green-600 hover:bg-green-700"
+                                >
+                                    {submitting ? 'Submitting...' : 'Submit Result'}
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </DialogContent>
