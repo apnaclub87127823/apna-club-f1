@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { X } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAuthToken } from '@/lib/auth';
@@ -81,6 +82,9 @@ const ClassicLudo = () => {
     const [loadingApproval, setLoadingApproval] = useState<string | null>(null);
     const [cancellingRoom, setCancellingRoom] = useState<string | null>(null);
     const [myCreatedRooms, setMyCreatedRooms] = useState<string[]>([]);
+    const [showCancelDialog, setShowCancelDialog] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
+    const [roomToCancel, setRoomToCancel] = useState<string | null>(null);
 
     // Fetch rooms on mount and periodically
     useEffect(() => {
@@ -468,13 +472,13 @@ const ClassicLudo = () => {
         }
     };
 
-    const handleCancelRoom = async (roomId: string) => {
+    const handleCancelRoom = async (roomId: string, reason?: string) => {
         setCancellingRoom(roomId);
         try {
             const token = getAuthToken();
             if (!token) return;
 
-            const response = await apiService.cancelRoom(token, roomId);
+            const response = await apiService.cancelRoom(token, roomId, reason);
             if (response.success) {
                 // Remove from created rooms list
                 setMyCreatedRooms(prev => prev.filter(id => id !== roomId));
@@ -497,6 +501,9 @@ const ClassicLudo = () => {
             });
         } finally {
             setCancellingRoom(null);
+            setShowCancelDialog(false);
+            setCancelReason('');
+            setRoomToCancel(null);
         }
     };
 
@@ -815,7 +822,10 @@ const ClassicLudo = () => {
                                             <div className="ml-4 mt-4 flex gap-2">
                                                 {myCreatedRooms.includes(battle.roomId) && battle.playersCount === 1 && (
                                                     <Button
-                                                        onClick={() => handleCancelRoom(battle.roomId)}
+                                                        onClick={() => {
+                                                            setRoomToCancel(battle.roomId);
+                                                            setShowCancelDialog(true);
+                                                        }}
                                                         disabled={cancellingRoom === battle.roomId}
                                                         className="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 h-6"
                                                     >
@@ -1022,30 +1032,103 @@ const ClassicLudo = () => {
                             </div>
                         )}
 
+                        <div className="flex gap-2 justify-between">
+                            <Button
+                                variant="destructive"
+                                onClick={() => {
+                                    if (!selectedClaimRoom) return;
+                                    setRoomToCancel(selectedClaimRoom.roomId);
+                                    setShowCancelDialog(true);
+                                }}
+                                disabled={claimLoading || cancellingRoom === selectedClaimRoom?.roomId}
+                                className="bg-red-600 hover:bg-red-700"
+                            >
+                                {cancellingRoom === selectedClaimRoom?.roomId ? 'Cancelling...' : 'Cancel Room'}
+                            </Button>
+
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setShowClaimDialog(false);
+                                        setSelectedClaimRoom(null);
+                                        setClaimUsername('');
+                                        setScreenshot(null);
+                                    }}
+                                    disabled={claimLoading}
+                                >
+                                    Close
+                                </Button>
+                                <Button
+                                    onClick={handleConfirmClaimResult}
+                                    disabled={claimLoading || !claimUsername.trim() || (claimType === 'win' && !screenshot)}
+                                    className="bg-green-600 hover:bg-green-700"
+                                >
+                                    {claimLoading ? 'Submitting...' : 'Submit Result'}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Cancel Room Dialog */}
+            <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+                <DialogContent className="bg-white text-black border-gray-300 shadow-xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold text-black">Cancel Room</DialogTitle>
+                        <DialogDescription className="text-gray-700">
+                            Are you sure you want to cancel this room? The bet amount will be refunded to all players.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-sm text-gray-700 mb-2 block">
+                                Reason for cancellation (Optional)
+                            </label>
+                            <Textarea
+                                value={cancelReason}
+                                onChange={(e) => setCancelReason(e.target.value)}
+                                placeholder="Enter reason for cancellation..."
+                                className="bg-gray-100 border border-gray-300 text-black placeholder:text-gray-500 focus:ring-2 focus:ring-gray-400"
+                                rows={3}
+                            />
+                        </div>
+
                         <div className="flex gap-2 justify-end">
                             <Button
                                 variant="outline"
                                 onClick={() => {
+                                    setShowCancelDialog(false);
+                                    setCancelReason('');
+                                    setRoomToCancel(null);
+                                }}
+                                disabled={cancellingRoom !== null}
+                                className="border-gray-400 text-black hover:bg-gray-100"
+                            >
+                                Close
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={async () => {
+                                    if (!roomToCancel) return;
+                                    await handleCancelRoom(roomToCancel, cancelReason || undefined);
                                     setShowClaimDialog(false);
                                     setSelectedClaimRoom(null);
                                     setClaimUsername('');
                                     setScreenshot(null);
                                 }}
-                                disabled={claimLoading}
+                                disabled={cancellingRoom !== null}
+                                className="bg-red-600 hover:bg-red-700 text-white"
                             >
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={handleConfirmClaimResult}
-                                disabled={claimLoading || !claimUsername.trim() || (claimType === 'win' && !screenshot)}
-                                className="bg-green-600 hover:bg-green-700"
-                            >
-                                {claimLoading ? 'Submitting...' : 'Submit Result'}
+                                {cancellingRoom ? 'Cancelling...' : 'Cancel Room'}
                             </Button>
                         </div>
                     </div>
                 </DialogContent>
             </Dialog>
+
         </div>
     );
 };
