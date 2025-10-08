@@ -416,6 +416,23 @@ class ApiService {
             body: reason ? JSON.stringify({ reason }) : undefined,
         });
     }
+
+    async requestMutualCancellation(token: string, roomId: string) {
+        console.log('Request mutual cancellation:', {
+            url: `${this.baseURL}/api/game/request-mutual-cancellation`,
+            token: token.substring(0, 20) + '...',
+            roomId
+        });
+
+        return this.request('/api/game/request-mutual-cancellation', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ roomId }),
+        });
+    }
 }
 
 export const apiService = new ApiService();
