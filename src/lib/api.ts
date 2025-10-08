@@ -400,17 +400,20 @@ class ApiService {
         });
     }
 
-    async cancelRoom(token: string, roomId: string) {
+    async cancelRoom(token: string, roomId: string, reason?: string) {
         console.log('Cancel room request:', {
             url: `${this.baseURL}/api/game/cancel-room/${roomId}`,
             token: token.substring(0, 20) + '...',
+            reason
         });
 
         return this.request(`/api/game/cancel-room/${roomId}`, {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
             },
+            body: reason ? JSON.stringify({ reason }) : undefined,
         });
     }
 }
