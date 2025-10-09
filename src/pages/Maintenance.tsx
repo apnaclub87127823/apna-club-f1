@@ -31,7 +31,7 @@ const Maintenance = () => {
             <div className="bg-background/50 border border-border rounded-lg p-4">
               <Clock className="w-8 h-8 text-primary mx-auto mb-2" />
               <p className="font-semibold text-foreground mb-1">Expected Duration</p>
-              <p className="text-sm text-muted-foreground">1-2 hours</p>
+              <p className="text-sm text-muted-foreground">1-2 days</p>
             </div>
 
             <div className="bg-background/50 border border-border rounded-lg p-4">
