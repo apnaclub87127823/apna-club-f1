@@ -23,42 +23,61 @@ import ClassicLudo from "./pages/ClassicLudo";
 import TransactionHistory from "./pages/TransactionHistory";
 import AdminDashboard from "./pages/AdminDashboard";
 import GameHistory from "./pages/GameHistory";
+import Maintenance from "./pages/Maintenance";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <WhatsAppFloatingButton />
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/refer-earn" element={<ReferEarn />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/otp-verify" element={<OtpVerify />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/terms" element={<Terms />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/kyc-verification" element={<KycVerification />} />
-            <Route path="/wallet" element={<Wallet />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/support" element={<Support />} />
-            <Route path="/wallet/deposit" element={<DepositMoney />} />
-            <Route path="/wallet/withdraw" element={<WithdrawMoney />} />
-            <Route path="/wallet/history" element={<TransactionHistory />} />
-            <Route path="/classic-ludo" element={<ClassicLudo />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/game-history" element={<GameHistory />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+// Set to true to enable maintenance mode
+const MAINTENANCE_MODE = true;
+
+const App = () => {
+  // If maintenance mode is enabled, show maintenance page for all routes
+  if (MAINTENANCE_MODE) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <BrowserRouter>
+            <Maintenance />
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <WhatsAppFloatingButton />
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/refer-earn" element={<ReferEarn />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/otp-verify" element={<OtpVerify />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/kyc-verification" element={<KycVerification />} />
+              <Route path="/wallet" element={<Wallet />} />
+              <Route path="/history" element={<History />} />
+              <Route path="/support" element={<Support />} />
+              <Route path="/wallet/deposit" element={<DepositMoney />} />
+              <Route path="/wallet/withdraw" element={<WithdrawMoney />} />
+              <Route path="/wallet/history" element={<TransactionHistory />} />
+              <Route path="/classic-ludo" element={<ClassicLudo />} />
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/game-history" element={<GameHistory />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
