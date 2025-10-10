@@ -165,12 +165,8 @@ const ClassicLudo = () => {
             // Combine pending and live for Open Battles
             setOpenBattles([...pendingRooms, ...liveRooms]);
 
-            // Fetch ended rooms (for Running Battles)
-            const endedResponse = await apiService.getAllRooms(token, 'ended', 1, 20);
-            if (endedResponse.success && endedResponse.data) {
-                const data = endedResponse.data as any;
-                setRunningBattles(data.rooms || []);
-            }
+            // Fetch ended rooms (for Running Battles) - now show live battles here
+            setRunningBattles(liveRooms);
         } catch (error) {
             console.error('Failed to fetch rooms:', error);
         } finally {
@@ -735,106 +731,6 @@ const ClassicLudo = () => {
                     </DialogContent>
                 </Dialog>
 
-                {/* Waiting Dialog */}
-                <Dialog open={showWaitingDialog} onOpenChange={setShowWaitingDialog}>
-                    <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                            <DialogTitle>Waiting for Other Player</DialogTitle>
-                            <DialogDescription>
-                                Please wait while another player joins the battle.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="flex justify-center py-4">
-                            <div className="text-orange-600 font-semibold">
-                                Waiting for other player to join...
-                            </div>
-                        </div>
-                        <div className="flex justify-end">
-                            <Button
-                                variant="outline"
-                                onClick={() => setShowWaitingDialog(false)}
-                            >
-                                Close
-                            </Button>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Room Code Dialog */}
-                <Dialog open={showRoomCodeDialog} onOpenChange={setShowRoomCodeDialog}>
-                    <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                            <DialogTitle>Ludo Room Code</DialogTitle>
-                            <DialogDescription>
-                                Use this code to join the game in Ludo King
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="flex justify-center py-4">
-                            <div className="text-2xl font-bold text-green-600">
-                                {roomCode}
-                            </div>
-                        </div>
-                        <div className="flex justify-end">
-                            <Button
-                                variant="outline"
-                                onClick={() => {
-                                    setShowRoomCodeDialog(false);
-                                    setRoomCode('');
-                                }}
-                            >
-                                Close
-                            </Button>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-
-                {/* Join Username Dialog */}
-                <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
-                    <DialogContent className="sm:max-w-md bg-white z-[9999]">
-                        <DialogHeader>
-                            <DialogTitle>Enter Ludo King Username</DialogTitle>
-                            <DialogDescription className="space-y-2">
-                                <p>Please enter your Ludo King username to join the battle.</p>
-                                <p className="text-red-600 font-semibold text-sm">
-                                    ⚠️ चेतावनी: यदि आप गलत यूजरनेम भरते हैं तो आपको जीत की राशि नहीं मिलेगी।
-                                </p>
-                                <p className="text-red-600 font-semibold text-sm">
-                                    (Warning: If you enter wrong username, you will not receive winning money)
-                                </p>
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                            <Input
-                                placeholder="Enter Ludo King Username"
-                                value={ludoUsername}
-                                onChange={(e) => setLudoUsername(e.target.value)}
-                                className="w-full"
-                                autoFocus
-                            />
-                            <div className="flex gap-2 justify-end">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => {
-                                        setShowJoinDialog(false);
-                                        setLudoUsername('');
-                                        setSelectedRoom(null);
-                                    }}
-                                    disabled={loading}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    onClick={handleConfirmJoinRoom}
-                                    disabled={loading || !ludoUsername.trim()}
-                                    className="bg-green-600 hover:bg-green-700 text-white"
-                                >
-                                    {loading ? 'Joining...' : 'Join Battle'}
-                                </Button>
-                            </div>
-                        </div>
-                    </DialogContent>
-                </Dialog>
-
                 {/* Pending Join Requests Section - Only for room creators */}
                 {pendingRequests.length > 0 && (
                     <div className="mb-6">
@@ -1016,50 +912,50 @@ const ClassicLudo = () => {
                                 const isSearching = battle.playersCount < 2;
 
                                 return (
-                                    <div key={battle.roomId} className="bg-white rounded-lg p-3 border border-gray-200">
-                                        <div className="flex items-center justify-between mb-2">
+                                    <div key={battle.roomId} className="bg-purple-50 rounded-lg px-2 py-1 border border-gray-200">
+                                        <div className="flex items-center justify-between mb-1">
                                             <div className="flex items-center gap-1">
-                                                <span className="text-[10px] font-medium text-gray-700">Playing For</span>
-                                                <div className="w-4 h-4 bg-green-600 rounded flex items-center justify-center">
-                                                    <span className="text-white text-[8px] font-bold">₹</span>
+                                                <span className="text-[9px] font-medium text-gray-700">Playing For</span>
+                                                <div className="w-3 h-3 bg-green-600 rounded flex items-center justify-center">
+                                                    <span className="text-white text-[7px] font-bold">₹</span>
                                                 </div>
-                                                <span className="text-xs font-bold text-gray-900">{battle.betAmount}</span>
+                                                <span className="text-[11px] font-bold text-gray-900">{battle.betAmount}</span>
                                             </div>
                                             <div className="flex items-center gap-1">
-                                                <span className="text-[10px] font-medium text-gray-700">Prize</span>
-                                                <div className="w-4 h-4 bg-green-600 rounded flex items-center justify-center">
-                                                    <span className="text-white text-[8px] font-bold">₹</span>
+                                                <span className="text-[9px] font-medium text-gray-700">Prize</span>
+                                                <div className="w-3 h-3 bg-green-600 rounded flex items-center justify-center">
+                                                    <span className="text-white text-[7px] font-bold">₹</span>
                                                 </div>
-                                                <span className="text-xs font-bold text-gray-900">{prize.toFixed(1)}</span>
+                                                <span className="text-[11px] font-bold text-gray-900">{prize.toFixed(1)}</span>
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center justify-between py-2">
+                                        <div className="flex items-center justify-between py-1">
                                             <div className="text-center flex-1">
-                                                <div className="w-12 h-12 mx-auto mb-1.5 bg-blue-100 rounded-full flex items-center justify-center">
-                                                    <span className="text-xl">👤</span>
+                                                <div className="w-8 h-8 mx-auto mb-1 bg-blue-100 rounded-full flex items-center justify-center">
+                                                    <span className="text-base">👤</span>
                                                 </div>
-                                                <p className="text-xs font-semibold text-gray-900">{player1?.ludoUsername || 'Player 1'}</p>
+                                                <p className="text-[10px] font-semibold text-gray-900">{player1?.ludoUsername || 'Player 1'}</p>
                                             </div>
 
-                                            <div className="flex-shrink-0 mx-4">
-                                                <img src={vsIcon} alt="VS" className="w-10 h-10" />
+                                            <div className="flex-shrink-0 mx-2">
+                                                <img src={vsIcon} alt="VS" className="w-7 h-7" />
                                             </div>
 
                                             <div className="text-center flex-1">
                                                 {isSearching ? (
                                                     <div className="flex flex-col items-center">
-                                                        <div className="w-12 h-12 mx-auto mb-1.5 bg-gray-100 rounded-full flex items-center justify-center">
-                                                            <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                                                        <div className="w-8 h-8 mx-auto mb-1 bg-gray-100 rounded-full flex items-center justify-center">
+                                                            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
                                                         </div>
-                                                        <p className="text-xs font-semibold text-gray-600">Searching...</p>
+                                                        <p className="text-[10px] font-semibold text-gray-600">Searching...</p>
                                                     </div>
                                                 ) : (
                                                     <>
-                                                        <div className="w-12 h-12 mx-auto mb-1.5 bg-pink-100 rounded-full flex items-center justify-center">
-                                                            <span className="text-xl">👤</span>
+                                                        <div className="w-8 h-8 mx-auto mb-1 bg-pink-100 rounded-full flex items-center justify-center">
+                                                            <span className="text-base">👤</span>
                                                         </div>
-                                                        <p className="text-xs font-semibold text-gray-900">{player2?.ludoUsername || 'Player 2'}</p>
+                                                        <p className="text-[10px] font-semibold text-gray-900">{player2?.ludoUsername || 'Player 2'}</p>
                                                     </>
                                                 )}
                                             </div>
