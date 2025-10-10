@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
@@ -96,6 +96,7 @@ const ClassicLudo = () => {
     const [selectedCancelReason, setSelectedCancelReason] = useState<string>('');
     const [roomToCancel, setRoomToCancel] = useState<string | null>(null);
     const [pendingJoinRooms, setPendingJoinRooms] = useState<string[]>([]);
+    const autoCancelledRoomsRef = useRef<Set<string>>(new Set());
 
     // Fetch rooms on mount and periodically
     useEffect(() => {
@@ -111,6 +112,58 @@ const ClassicLudo = () => {
             return () => clearInterval(interval);
         }
     }, [isAuthenticated, profile?.fullName]); // Re-fetch when profile loads
+
+    // Check and auto-cancel rooms based on creation time
+    useEffect(() => {
+        if (!isAuthenticated || myCreatedRooms.length === 0) return;
+
+        const checkAndCancelRooms = async () => {
+            try {
+                const token = getAuthToken();
+                if (!token) return;
+
+                for (const roomId of myCreatedRooms) {
+                    // Skip if already auto-cancelled
+                    if (autoCancelledRoomsRef.current.has(roomId)) continue;
+
+                    const room = openBattles.find(r => r.roomId === roomId);
+                    if (!room || room.playersCount !== 1) continue;
+
+                    // Get room creation time from players array
+                    const creationTime = room.players?.[0]?.joinedAt;
+                    if (creationTime) {
+                        const createdAt = new Date(creationTime).getTime();
+                        const now = new Date().getTime();
+                        const minutesPassed = (now - createdAt) / (1000 * 60);
+
+                        // If more than 3 minutes passed, cancel the room
+                        if (minutesPassed >= 3) {
+                            autoCancelledRoomsRef.current.add(roomId);
+
+                            await apiService.cancelRoom(token, roomId, 'No players joined within 3 minutes');
+
+                            toast({
+                                title: "Room Cancelled",
+                                description: "Your room was automatically cancelled because no one joined within 3 minutes",
+                                variant: "destructive",
+                            });
+
+                            await fetchRooms();
+                            await fetchUserRooms();
+                        }
+                    }
+                }
+            } catch (error: any) {
+                console.error('Auto-cancel check failed:', error);
+            }
+        };
+
+        // Check immediately and then every 10 seconds
+        checkAndCancelRooms();
+        const interval = setInterval(checkAndCancelRooms, 10000);
+
+        return () => clearInterval(interval);
+    }, [myCreatedRooms, openBattles, isAuthenticated, toast]);
 
     const fetchUserRooms = async () => {
         try {
