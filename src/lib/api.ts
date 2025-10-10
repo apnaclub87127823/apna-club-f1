@@ -272,6 +272,37 @@ class ApiService {
         });
     }
 
+    async getLudoRoomCode(token: string, roomId: string) {
+        return this.request(`/api/game/ludo-room-code/${roomId}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+    }
+
+    async getRoomDetails(token: string, status?: string) {
+        // Use my-rooms endpoint to get detailed room information with player status
+        const params = status ? `?status=${status}` : '';
+        return this.request(`/api/game/my-rooms${params}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+    }
+
+    async saveLudoRoomCode(token: string, roomId: string, ludoRoomCode: string) {
+        return this.request('/api/game/save-ludo-room-code', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ roomId, ludoRoomCode }),
+        });
+    }
+
     async getUserRooms(token: string, status?: string) {
         const params = status ? `?status=${status}` : '';
         return this.request(`/api/game/my-rooms${params}`, {

@@ -20,15 +20,17 @@ import Support from "./pages/Support";
 import DepositMoney from "./pages/DepositMoney";
 import WithdrawMoney from "./pages/WithdrawMoney";
 import ClassicLudo from "./pages/ClassicLudo";
+import RoomCode from "./pages/RoomCode";
 import TransactionHistory from "./pages/TransactionHistory";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminRooms from "./pages/AdminRooms";
 import GameHistory from "./pages/GameHistory";
 import Maintenance from "./pages/Maintenance";
 
 const queryClient = new QueryClient();
 
 // Set to true to enable maintenance mode
-const MAINTENANCE_MODE = true;
+const MAINTENANCE_MODE = false;
 
 const App = () => {
   // If maintenance mode is enabled, show maintenance page for all routes
@@ -68,7 +70,9 @@ const App = () => {
               <Route path="/wallet/withdraw" element={<WithdrawMoney />} />
               <Route path="/wallet/history" element={<TransactionHistory />} />
               <Route path="/classic-ludo" element={<ClassicLudo />} />
+              <Route path="/room-code" element={<RoomCode />} />
               <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/rooms" element={<AdminRooms />} />
               <Route path="/game-history" element={<GameHistory />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

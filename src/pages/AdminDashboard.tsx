@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, ArrowLeft, Users, Clock, CheckCircle, XCircle, IndianRupee, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, ZoomIn, X } from 'lucide-react';
+import { Menu, ArrowLeft, Users, Clock, CheckCircle, XCircle, IndianRupee, RefreshCw, AlertTriangle, ChevronDown, ChevronUp, ZoomIn, X, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAuthToken } from '@/lib/auth';
 import { adminApiService } from '@/lib/adminApi';
@@ -62,6 +62,7 @@ interface Withdrawal {
 interface Dispute {
     disputeId: string;
     roomId: string;
+    ludoRoomCode?: string;
     claimType: 'win' | 'loss';
     claimedBy: {
         id: string;
@@ -87,6 +88,18 @@ interface UserData {
     mobileNumber: string;
 }
 
+interface UserWithWallet {
+    _id: string;
+    fullName: string;
+    username: string;
+    mobileNumber: string;
+    wallet: {
+        depositBalance: number;
+        winningBalance: number;
+        totalBalance: number;
+    };
+}
+
 const AdminDashboard = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
@@ -99,6 +112,15 @@ const AdminDashboard = () => {
     const [disputeStatusFilter, setDisputeStatusFilter] = useState<string>('pending');
     const [updating, setUpdating] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<string>('withdrawals');
+    const [rooms, setRooms] = useState<any[]>([]);
+    const [roomsLoading, setRoomsLoading] = useState(false);
+    const [roomStatusFilter, setRoomStatusFilter] = useState<string>('all');
+    const [roomPage, setRoomPage] = useState(1);
+    const [totalRoomPages, setTotalRoomPages] = useState(1);
+    const [totalRooms, setTotalRooms] = useState(0);
+    const [showCancelDialog, setShowCancelDialog] = useState(false);
+    const [selectedRoom, setSelectedRoom] = useState<any | null>(null);
+    const [cancelReason, setCancelReason] = useState('');
     const [showResolveDialog, setShowResolveDialog] = useState(false);
     const [selectedDispute, setSelectedDispute] = useState<{ roomId: string, disputes: Dispute[] } | null>(null);
     const [adminNotes, setAdminNotes] = useState('');
@@ -106,10 +128,21 @@ const AdminDashboard = () => {
     const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
     const [screenshotModal, setScreenshotModal] = useState<{ isOpen: boolean, url: string, userName: string }>({ isOpen: false, url: '', userName: '' });
     const [users, setUsers] = useState<UserData[]>([]);
+    const [usersWithWallet, setUsersWithWallet] = useState<UserWithWallet[]>([]);
     const [selectedUserId, setSelectedUserId] = useState<string>('');
     const [depositAmount, setDepositAmount] = useState<string>('');
     const [addingBalance, setAddingBalance] = useState(false);
     const [userSearch, setUserSearch] = useState<string>('');
+    const [userPage, setUserPage] = useState(1);
+    const [totalUserPages, setTotalUserPages] = useState(1);
+    const [totalUsers, setTotalUsers] = useState(0);
+    const [showAddMoneyDialog, setShowAddMoneyDialog] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<UserWithWallet | null>(null);
+    const [balanceOperation, setBalanceOperation] = useState<'add' | 'deduct'>('add');
+    const [depositDeductAmount, setDepositDeductAmount] = useState<string>('');
+    const [winningDeductAmount, setWinningDeductAmount] = useState<string>('');
+    const [setDepositToZero, setSetDepositToZero] = useState(false);
+    const [setWinningToZero, setSetWinningToZero] = useState(false);
 
     useEffect(() => {
         // Check if user is admin
@@ -120,7 +153,7 @@ const AdminDashboard = () => {
         }
 
         fetchDashboardData();
-    }, [user, navigate, statusFilter, disputeStatusFilter, activeTab]);
+    }, [user, navigate, statusFilter, disputeStatusFilter, activeTab, userPage, userSearch, roomStatusFilter, roomPage]);
 
     const fetchDashboardData = async () => {
         const token = getAuthToken();
@@ -148,10 +181,35 @@ const AdminDashboard = () => {
                     setDisputes(disputesResponse.data.disputes);
                 }
             } else if (activeTab === 'add-balance') {
-                const usersResponse = await adminApiService.getAllUsers(token);
+                const usersResponse = await adminApiService.getAllUsersWithWallet(
+                    token,
+                    userPage,
+                    10,
+                    userSearch || undefined
+                );
                 if (usersResponse.success && usersResponse.data) {
-                    setUsers(usersResponse.data);
+                    setUsersWithWallet(usersResponse.data.users);
+                    setTotalUserPages(usersResponse.data.totalPages);
+                    setTotalUsers(usersResponse.data.totalUsers);
                 }
+            } else if (activeTab === 'rooms') {
+                setRoomsLoading(true);
+                const roomsResponse = await adminApiService.getAllRooms(
+                    token,
+                    roomStatusFilter === 'all' ? undefined : (roomStatusFilter as any),
+                    roomPage,
+                    20
+                );
+                if (roomsResponse.success && roomsResponse.data) {
+                    setRooms(roomsResponse.data);
+                    setTotalRoomPages(roomsResponse.totalPages || 1);
+                    setTotalRooms(roomsResponse.totalRooms || 0);
+                } else {
+                    setRooms([]);
+                    setTotalRoomPages(1);
+                    setTotalRooms(0);
+                }
+                setRoomsLoading(false);
             }
         } catch (error) {
             console.error('Failed to fetch dashboard data:', error);
@@ -183,6 +241,9 @@ const AdminDashboard = () => {
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'pending': return 'bg-yellow-500';
+            case 'live': return 'bg-blue-500';
+            case 'ended': return 'bg-orange-500';
+            case 'finished': return 'bg-green-500';
             case 'success': return 'bg-green-500';
             case 'cancelled': return 'bg-red-500';
             default: return 'bg-gray-500';
@@ -198,6 +259,67 @@ const AdminDashboard = () => {
         }
     };
 
+    const handleRoomStatusUpdate = async (roomId: string, newStatus: 'pending' | 'live' | 'ended' | 'finished' | 'cancelled') => {
+        const token = getAuthToken();
+        if (!token) return;
+
+        try {
+            setUpdating(roomId);
+            const response = await adminApiService.updateRoomStatus(token, roomId, newStatus);
+
+            if (response.success) {
+                toast.success(response.message);
+                fetchDashboardData();
+            }
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to update room status');
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    const handleCancelRoom = async () => {
+        if (!selectedRoom) return;
+
+        const token = getAuthToken();
+        if (!token) return;
+
+        try {
+            setUpdating(selectedRoom.roomId);
+            const response = await adminApiService.adminCancelRoom(
+                token,
+                selectedRoom.roomId,
+                cancelReason
+            );
+
+            if (response.success) {
+                toast.success(response.message);
+                setShowCancelDialog(false);
+                setSelectedRoom(null);
+                setCancelReason('');
+                fetchDashboardData();
+            }
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to cancel room');
+        } finally {
+            setUpdating(null);
+        }
+    };
+
+    const openCancelDialog = (room: any) => {
+        setSelectedRoom(room);
+        setShowCancelDialog(true);
+    };
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
 
 
     const handleResolveDispute = async () => {
@@ -252,8 +374,8 @@ const AdminDashboard = () => {
     };
 
     const handleAddBalance = async () => {
-        if (!selectedUserId || !depositAmount || parseFloat(depositAmount) <= 0) {
-            toast.error('Please select a user and enter a valid amount');
+        if (!selectedUser || !depositAmount || parseFloat(depositAmount) <= 0) {
+            toast.error('Please enter a valid amount');
             return;
         }
 
@@ -264,17 +386,64 @@ const AdminDashboard = () => {
             setAddingBalance(true);
             const response = await adminApiService.addDepositFundsToUser(
                 token,
-                selectedUserId,
+                selectedUser._id,
                 parseFloat(depositAmount)
             );
 
             if (response.success) {
                 toast.success(response.message);
-                setSelectedUserId('');
+                setSelectedUser(null);
                 setDepositAmount('');
+                setShowAddMoneyDialog(false);
+                fetchDashboardData();
             }
         } catch (error: any) {
             toast.error(error.message || 'Failed to add balance');
+        } finally {
+            setAddingBalance(false);
+        }
+    };
+
+    const handleDeductBalance = async () => {
+        if (!selectedUser) {
+            toast.error('No user selected');
+            return;
+        }
+
+        const depositDeduct = depositDeductAmount ? parseFloat(depositDeductAmount) : undefined;
+        const winningDeduct = winningDeductAmount ? parseFloat(winningDeductAmount) : undefined;
+
+        if (!depositDeduct && !winningDeduct && !setDepositToZero && !setWinningToZero) {
+            toast.error('Please enter deduction amounts or select balances to set to zero');
+            return;
+        }
+
+        const token = getAuthToken();
+        if (!token) return;
+
+        try {
+            setAddingBalance(true);
+            const response = await adminApiService.updateUserBalance(
+                token,
+                selectedUser._id,
+                depositDeduct,
+                winningDeduct,
+                setDepositToZero,
+                setWinningToZero
+            );
+
+            if (response.success) {
+                toast.success(response.message);
+                setSelectedUser(null);
+                setDepositDeductAmount('');
+                setWinningDeductAmount('');
+                setSetDepositToZero(false);
+                setSetWinningToZero(false);
+                setShowAddMoneyDialog(false);
+                fetchDashboardData();
+            }
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to update balance');
         } finally {
             setAddingBalance(false);
         }
@@ -394,10 +563,14 @@ const AdminDashboard = () => {
 
                 {/* Tabs for Withdrawals, Rooms, and Disputes */}
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="withdrawals" className="gap-2">
                             <IndianRupee className="h-4 w-4" />
                             Withdrawals
+                        </TabsTrigger>
+                        <TabsTrigger value="rooms" className="gap-2">
+                            <Users className="h-4 w-4" />
+                            Rooms
                         </TabsTrigger>
                         <TabsTrigger value="disputes" className="gap-2">
                             <AlertTriangle className="h-4 w-4" />
@@ -618,6 +791,148 @@ const AdminDashboard = () => {
                         </Card>
                     </TabsContent>
 
+                    {/* Rooms Tab */}
+                    <TabsContent value="rooms">
+                        <Card>
+                            <CardHeader className="p-3 lg:p-6">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                    <div>
+                                        <CardTitle className="text-base lg:text-lg">Room Management</CardTitle>
+                                        <CardDescription className="text-xs lg:text-sm">Manage all game rooms</CardDescription>
+                                    </div>
+                                    <Select value={roomStatusFilter} onValueChange={setRoomStatusFilter}>
+                                        <SelectTrigger className="w-full sm:w-[150px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Rooms</SelectItem>
+                                            <SelectItem value="pending">Pending</SelectItem>
+                                            <SelectItem value="live">Live</SelectItem>
+                                            <SelectItem value="ended">Ended</SelectItem>
+                                            <SelectItem value="finished">Finished</SelectItem>
+                                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0 lg:p-6 lg:pt-0">
+                                {roomsLoading ? (
+                                    <div className="flex justify-center py-8">
+                                        <RefreshCw className="h-6 w-6 animate-spin text-primary" />
+                                    </div>
+                                ) : rooms.length === 0 ? (
+                                    <p className="text-center text-muted-foreground py-8 text-sm">No rooms found</p>
+                                ) : (
+                                    <>
+                                        <div className="overflow-x-auto rounded-md border">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead>Room ID</TableHead>
+                                                        <TableHead>Bet Amount</TableHead>
+                                                        <TableHead>Status</TableHead>
+                                                        <TableHead>Players</TableHead>
+                                                        <TableHead>Created By</TableHead>
+                                                        <TableHead>Created At</TableHead>
+                                                        <TableHead>Actions</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {rooms.map((room) => (
+                                                        <TableRow key={room._id}>
+                                                            <TableCell className="font-mono text-sm">
+                                                                {room.roomId}
+                                                            </TableCell>
+                                                            <TableCell>₹{room.betAmount}</TableCell>
+                                                            <TableCell>
+                                                                <Badge className={getStatusColor(room.status)}>
+                                                                    {room.status}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {room.players.filter((p: any) => p.userId).length}/2
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {room.createdBy ? (
+                                                                    <div>
+                                                                        <p className="font-medium text-sm">{room.createdBy.fullName}</p>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            {room.createdBy.mobileNumber}
+                                                                        </p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span className="text-xs text-muted-foreground">Unknown</span>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-sm">
+                                                                {formatDate(room.createdAt)}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex gap-2">
+                                                                    <Select
+                                                                        value={room.status}
+                                                                        onValueChange={(value) =>
+                                                                            handleRoomStatusUpdate(room.roomId, value as any)
+                                                                        }
+                                                                        disabled={updating === room.roomId}
+                                                                    >
+                                                                        <SelectTrigger className="w-28">
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="pending">Pending</SelectItem>
+                                                                            <SelectItem value="live">Live</SelectItem>
+                                                                            <SelectItem value="ended">Ended</SelectItem>
+                                                                            <SelectItem value="finished">Finished</SelectItem>
+                                                                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="destructive"
+                                                                        onClick={() => openCancelDialog(room)}
+                                                                        disabled={updating === room.roomId || room.status === 'finished'}
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+
+                                        {/* Pagination */}
+                                        {totalRoomPages > 1 && (
+                                            <div className="flex items-center justify-center gap-2 mt-4">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setRoomPage(p => Math.max(1, p - 1))}
+                                                    disabled={roomPage === 1}
+                                                >
+                                                    Previous
+                                                </Button>
+                                                <span className="text-sm">
+                                                    Page {roomPage} of {totalRoomPages}
+                                                </span>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setRoomPage(p => Math.min(totalRoomPages, p + 1))}
+                                                    disabled={roomPage === totalRoomPages}
+                                                >
+                                                    Next
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
                     {/* Disputes Tab */}
                     <TabsContent value="disputes">
                         <Card>
@@ -655,7 +970,7 @@ const AdminDashboard = () => {
                                                             {/* Room Header - Always Visible */}
                                                             <CollapsibleTrigger asChild>
                                                                 <div className="p-4 hover:bg-muted/50 cursor-pointer transition-colors">
-                                                                    <div className="flex items-center justify-between gap-3">
+                                                                    <div className="flex items-start justify-between gap-3">
                                                                         <div className="flex-1 space-y-2">
                                                                             <div className="flex items-center gap-2 flex-wrap">
                                                                                 <span className="font-mono font-semibold text-sm lg:text-base">{roomId}</span>
@@ -670,24 +985,34 @@ const AdminDashboard = () => {
                                                                                 Click to view all disputes for this room
                                                                             </div>
                                                                         </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            {allPending && (
-                                                                                <Button
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        handleViewDispute(roomId);
-                                                                                    }}
-                                                                                    size="sm"
-                                                                                    className="gap-1"
-                                                                                >
-                                                                                    Resolve
-                                                                                </Button>
+                                                                        <div className="flex flex-col items-end gap-2">
+                                                                            {roomDisputes[0]?.ludoRoomCode && (
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="text-xs text-muted-foreground">Ludo Code:</span>
+                                                                                    <Badge variant="secondary" className="font-mono text-xs font-semibold">
+                                                                                        {roomDisputes[0].ludoRoomCode}
+                                                                                    </Badge>
+                                                                                </div>
                                                                             )}
-                                                                            {isExpanded ? (
-                                                                                <ChevronUp className="h-5 w-5 text-muted-foreground" />
-                                                                            ) : (
-                                                                                <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                                                                            )}
+                                                                            <div className="flex items-center gap-2">
+                                                                                {allPending && (
+                                                                                    <Button
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            handleViewDispute(roomId);
+                                                                                        }}
+                                                                                        size="sm"
+                                                                                        className="gap-1"
+                                                                                    >
+                                                                                        Resolve
+                                                                                    </Button>
+                                                                                )}
+                                                                                {isExpanded ? (
+                                                                                    <ChevronUp className="h-5 w-5 text-muted-foreground" />
+                                                                                ) : (
+                                                                                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -786,83 +1111,115 @@ const AdminDashboard = () => {
                     <TabsContent value="add-balance">
                         <Card>
                             <CardHeader className="p-3 lg:p-6">
-                                <CardTitle className="text-base lg:text-lg">Add Balance to User</CardTitle>
+                                <CardTitle className="text-base lg:text-lg">Manage User Balances</CardTitle>
                                 <CardDescription className="text-xs lg:text-sm">
-                                    Manually add deposit balance to user accounts
+                                    View all users and add deposit balance
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="p-3 lg:p-6 space-y-4">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">Search User</label>
                                     <Input
                                         type="text"
                                         placeholder="Search by name, username, or mobile number..."
                                         value={userSearch}
-                                        onChange={(e) => setUserSearch(e.target.value)}
+                                        onChange={(e) => {
+                                            setUserSearch(e.target.value);
+                                            setUserPage(1);
+                                        }}
                                         className="w-full"
                                     />
                                 </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Select User</label>
-                                    <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Choose a user..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {users
-                                                .filter(user => {
-                                                    if (!userSearch) return true;
-                                                    const search = userSearch.toLowerCase();
-                                                    return (
-                                                        user.fullName.toLowerCase().includes(search) ||
-                                                        user.username.toLowerCase().includes(search) ||
-                                                        user.mobileNumber.includes(search)
-                                                    );
-                                                })
-                                                .map((user) => (
-                                                    <SelectItem key={user._id} value={user._id}>
-                                                        {user.fullName} (@{user.username}) - {user.mobileNumber}
-                                                    </SelectItem>
-                                                ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Amount (₹)</label>
-                                    <Input
-                                        type="number"
-                                        placeholder="Enter amount"
-                                        value={depositAmount}
-                                        onChange={(e) => setDepositAmount(e.target.value)}
-                                        min="1"
-                                        step="1"
-                                    />
-                                </div>
-
-                                <Button
-                                    onClick={handleAddBalance}
-                                    disabled={addingBalance || !selectedUserId || !depositAmount}
-                                    className="w-full"
-                                >
-                                    {addingBalance ? (
-                                        <>
-                                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                                            Adding Balance...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <IndianRupee className="h-4 w-4 mr-2" />
-                                            Add Balance
-                                        </>
-                                    )}
-                                </Button>
-
-                                {users.length === 0 && !loading && (
-                                    <p className="text-center text-muted-foreground text-sm py-4">
+                                {loading ? (
+                                    <div className="flex justify-center py-8">
+                                        <RefreshCw className="h-8 w-8 animate-spin text-primary" />
+                                    </div>
+                                ) : usersWithWallet.length === 0 ? (
+                                    <p className="text-center text-muted-foreground text-sm py-8">
                                         No users found
                                     </p>
+                                ) : (
+                                    <>
+                                        <div className="overflow-x-auto">
+                                            <Table>
+                                                <TableHeader>
+                                                    <TableRow>
+                                                        <TableHead className="text-xs">Name</TableHead>
+                                                        <TableHead className="text-xs">Mobile</TableHead>
+                                                        <TableHead className="text-xs text-right">Wallet Balance</TableHead>
+                                                        <TableHead className="text-xs text-center">Action</TableHead>
+                                                    </TableRow>
+                                                </TableHeader>
+                                                <TableBody>
+                                                    {usersWithWallet.map((user) => (
+                                                        <TableRow key={user._id}>
+                                                            <TableCell className="text-xs">
+                                                                <div>
+                                                                    <p className="font-medium">{user.fullName}</p>
+                                                                    <p className="text-muted-foreground text-[10px]">@{user.username}</p>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-xs">{user.mobileNumber}</TableCell>
+                                                            <TableCell className="text-xs text-right">
+                                                                <div className="flex flex-col items-end">
+                                                                    <p className="font-bold text-green-600">₹{user.wallet.totalBalance.toFixed(2)}</p>
+                                                                    <p className="text-[10px] text-muted-foreground">
+                                                                        D: ₹{user.wallet.depositBalance.toFixed(2)} | W: ₹{user.wallet.winningBalance.toFixed(2)}
+                                                                    </p>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        setSelectedUser(user);
+                                                                        setDepositAmount('');
+                                                                        setDepositDeductAmount('');
+                                                                        setWinningDeductAmount('');
+                                                                        setSetDepositToZero(false);
+                                                                        setSetWinningToZero(false);
+                                                                        setBalanceOperation('add');
+                                                                        setShowAddMoneyDialog(true);
+                                                                    }}
+                                                                    className="h-7 text-xs"
+                                                                >
+                                                                    Add Money
+                                                                </Button>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
+
+                                        {/* Pagination */}
+                                        <div className="flex items-center justify-between pt-4 border-t">
+                                            <p className="text-xs text-muted-foreground">
+                                                Showing {((userPage - 1) * 10) + 1} to {Math.min(userPage * 10, totalUsers)} of {totalUsers} users
+                                            </p>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => setUserPage(prev => Math.max(1, prev - 1))}
+                                                    disabled={userPage === 1}
+                                                >
+                                                    Previous
+                                                </Button>
+                                                <div className="flex items-center gap-1 px-3 text-xs">
+                                                    Page {userPage} of {totalUserPages}
+                                                </div>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => setUserPage(prev => Math.min(totalUserPages, prev + 1))}
+                                                    disabled={userPage === totalUserPages}
+                                                >
+                                                    Next
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </>
                                 )}
                             </CardContent>
                         </Card>
@@ -996,6 +1353,218 @@ const AdminDashboard = () => {
                                     className="w-full h-auto object-contain"
                                     style={{ maxHeight: 'calc(95vh - 120px)' }}
                                 />
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Add/Deduct Money Dialog */}
+                <Dialog open={showAddMoneyDialog} onOpenChange={setShowAddMoneyDialog}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Manage User Balance</DialogTitle>
+                            <DialogDescription>
+                                {balanceOperation === 'add' ? 'Add deposit balance' : 'Deduct balance or set to zero'} for {selectedUser?.fullName}
+                            </DialogDescription>
+                        </DialogHeader>
+                        {selectedUser && (
+                            <div className="space-y-4">
+                                <div className="bg-muted p-3 rounded-lg space-y-1">
+                                    <p className="text-sm font-medium">{selectedUser.fullName}</p>
+                                    <p className="text-xs text-muted-foreground">@{selectedUser.username}</p>
+                                    <p className="text-xs text-muted-foreground">{selectedUser.mobileNumber}</p>
+                                    <div className="mt-2 space-y-1">
+                                        <p className="text-sm font-bold text-green-600">
+                                            Total: ₹{selectedUser.wallet.totalBalance.toFixed(2)}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                            Deposit: ₹{selectedUser.wallet.depositBalance.toFixed(2)} | Winning: ₹{selectedUser.wallet.winningBalance.toFixed(2)}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Operation Type Toggle */}
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant={balanceOperation === 'add' ? 'default' : 'outline'}
+                                        onClick={() => setBalanceOperation('add')}
+                                        className="flex-1"
+                                        size="sm"
+                                    >
+                                        Add Money
+                                    </Button>
+                                    <Button
+                                        variant={balanceOperation === 'deduct' ? 'default' : 'outline'}
+                                        onClick={() => setBalanceOperation('deduct')}
+                                        className="flex-1"
+                                        size="sm"
+                                    >
+                                        Deduct/Reset
+                                    </Button>
+                                </div>
+
+                                {balanceOperation === 'add' ? (
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Amount (₹)</label>
+                                        <Input
+                                            type="number"
+                                            placeholder="Enter amount to add"
+                                            value={depositAmount}
+                                            onChange={(e) => setDepositAmount(e.target.value)}
+                                            min="1"
+                                            step="1"
+                                            autoFocus
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Deduct from Deposit Balance (₹)</label>
+                                            <Input
+                                                type="number"
+                                                placeholder="Enter amount to deduct"
+                                                value={depositDeductAmount}
+                                                onChange={(e) => setDepositDeductAmount(e.target.value)}
+                                                min="0"
+                                                step="1"
+                                                disabled={setDepositToZero}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Deduct from Winning Balance (₹)</label>
+                                            <Input
+                                                type="number"
+                                                placeholder="Enter amount to deduct"
+                                                value={winningDeductAmount}
+                                                onChange={(e) => setWinningDeductAmount(e.target.value)}
+                                                min="0"
+                                                step="1"
+                                                disabled={setWinningToZero}
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2 pt-2 border-t">
+                                            <label className="flex items-center space-x-2 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={setDepositToZero}
+                                                    onChange={(e) => {
+                                                        setSetDepositToZero(e.target.checked);
+                                                        if (e.target.checked) setDepositDeductAmount('');
+                                                    }}
+                                                    className="rounded"
+                                                />
+                                                <span className="text-sm">Set Deposit Balance to Zero</span>
+                                            </label>
+                                            <label className="flex items-center space-x-2 cursor-pointer">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={setWinningToZero}
+                                                    onChange={(e) => {
+                                                        setSetWinningToZero(e.target.checked);
+                                                        if (e.target.checked) setWinningDeductAmount('');
+                                                    }}
+                                                    className="rounded"
+                                                />
+                                                <span className="text-sm">Set Winning Balance to Zero</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            setShowAddMoneyDialog(false);
+                                            setSelectedUser(null);
+                                            setDepositAmount('');
+                                            setDepositDeductAmount('');
+                                            setWinningDeductAmount('');
+                                            setSetDepositToZero(false);
+                                            setSetWinningToZero(false);
+                                        }}
+                                        disabled={addingBalance}
+                                        className="flex-1"
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        onClick={balanceOperation === 'add' ? handleAddBalance : handleDeductBalance}
+                                        disabled={
+                                            addingBalance ||
+                                            (balanceOperation === 'add' && (!depositAmount || parseFloat(depositAmount) <= 0)) ||
+                                            (balanceOperation === 'deduct' && !depositDeductAmount && !winningDeductAmount && !setDepositToZero && !setWinningToZero)
+                                        }
+                                        className="flex-1"
+                                    >
+                                        {addingBalance ? (
+                                            <>
+                                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <IndianRupee className="h-4 w-4 mr-2" />
+                                                {balanceOperation === 'add' ? 'Add Money' : 'Update Balance'}
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </DialogContent>
+                </Dialog>
+
+                {/* Cancel Room Dialog */}
+                <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Cancel Room</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to cancel room {selectedRoom?.roomId}?
+                                All players will be refunded their bet amount.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm font-medium">Cancellation Reason</label>
+                                <Textarea
+                                    value={cancelReason}
+                                    onChange={(e) => setCancelReason(e.target.value)}
+                                    placeholder="Enter reason for cancellation..."
+                                    className="mt-2"
+                                    rows={4}
+                                />
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setShowCancelDialog(false);
+                                        setSelectedRoom(null);
+                                        setCancelReason('');
+                                    }}
+                                    className="flex-1"
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    onClick={handleCancelRoom}
+                                    disabled={updating === selectedRoom?.roomId}
+                                    className="flex-1"
+                                >
+                                    {updating === selectedRoom?.roomId ? (
+                                        <>
+                                            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                            Cancelling...
+                                        </>
+                                    ) : (
+                                        'Cancel Room'
+                                    )}
+                                </Button>
                             </div>
                         </div>
                     </DialogContent>

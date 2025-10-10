@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,12 @@ interface Room {
     maxPlayers: number;
     createdBy: string;
     totalPrizePool: number;
+    roomCode?: string;
+    roomCreator?: {
+        id: string;
+        fullName: string;
+        username: string;
+    };
     players?: Array<{
         fullName: string;
         ludoUsername: string;
@@ -51,6 +58,7 @@ interface PendingRequest {
 }
 
 const ClassicLudo = () => {
+    const navigate = useNavigate();
     const { isAuthenticated } = useAuth();
     const { toast } = useToast();
     const { wallet, refetch: refetchWallet } = useWallet();
@@ -61,6 +69,7 @@ const ClassicLudo = () => {
     const [openBattles, setOpenBattles] = useState<Room[]>([]);
     const [runningBattles, setRunningBattles] = useState<Room[]>([]);
     const [loading, setLoading] = useState(false);
+    const [dataLoading, setDataLoading] = useState(true);
     const [createLoading, setCreateLoading] = useState(false);
     const [showUsernameDialog, setShowUsernameDialog] = useState(false);
     const [showJoinDialog, setShowJoinDialog] = useState(false);
@@ -84,7 +93,9 @@ const ClassicLudo = () => {
     const [myCreatedRooms, setMyCreatedRooms] = useState<string[]>([]);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [cancelReason, setCancelReason] = useState('');
+    const [selectedCancelReason, setSelectedCancelReason] = useState<string>('');
     const [roomToCancel, setRoomToCancel] = useState<string | null>(null);
+    const [pendingJoinRooms, setPendingJoinRooms] = useState<string[]>([]);
 
     // Fetch rooms on mount and periodically
     useEffect(() => {
@@ -139,21 +150,31 @@ const ClassicLudo = () => {
             const token = getAuthToken();
             if (!token) return;
 
-            // Fetch pending rooms (open battles)
+            setDataLoading(true);
+            // Fetch pending and live rooms (for Open Battles)
             const pendingResponse = await apiService.getAllRooms(token, 'pending', 1, 20);
-            if (pendingResponse.success && pendingResponse.data) {
-                const data = pendingResponse.data as any;
-                setOpenBattles(data.rooms || []);
-            }
-
-            // Fetch live rooms (running battles)
             const liveResponse = await apiService.getAllRooms(token, 'live', 1, 20);
-            if (liveResponse.success && liveResponse.data) {
-                const data = liveResponse.data as any;
+
+            const pendingRooms = pendingResponse.success && pendingResponse.data
+                ? (pendingResponse.data as any).rooms || []
+                : [];
+            const liveRooms = liveResponse.success && liveResponse.data
+                ? (liveResponse.data as any).rooms || []
+                : [];
+
+            // Combine pending and live for Open Battles
+            setOpenBattles([...pendingRooms, ...liveRooms]);
+
+            // Fetch ended rooms (for Running Battles)
+            const endedResponse = await apiService.getAllRooms(token, 'ended', 1, 20);
+            if (endedResponse.success && endedResponse.data) {
+                const data = endedResponse.data as any;
                 setRunningBattles(data.rooms || []);
             }
         } catch (error) {
             console.error('Failed to fetch rooms:', error);
+        } finally {
+            setDataLoading(false);
         }
     };
 
@@ -202,22 +223,13 @@ const ClassicLudo = () => {
             return;
         }
 
-        if (!ludoRoomCode.trim()) {
-            toast({
-                title: "Room Code Required",
-                description: "Please enter Ludo King room code",
-                variant: "destructive",
-            });
-            return;
-        }
-
         setCreateLoading(true);
         try {
             const token = getAuthToken();
             if (!token) return;
 
             const amount = parseInt(tempBattleAmount);
-            const response = await apiService.createRoom(token, amount, ludoUsername.trim(), ludoRoomCode.trim());
+            const response = await apiService.createRoom(token, amount, ludoUsername.trim(), ludoRoomCode.trim() || undefined);
             if (response.success) {
                 const data = response.data as any;
 
@@ -249,7 +261,7 @@ const ClassicLudo = () => {
         }
     };
 
-    const handlePlayClick = (room: Room) => {
+    const handlePlayClick = async (room: Room) => {
         if (!isAuthenticated) {
             toast({
                 title: "Authentication Required",
@@ -259,13 +271,54 @@ const ClassicLudo = () => {
             return;
         }
 
+        // Check if room is full (2 players)
+        if (room.playersCount >= 2) {
+            const isUserInRoom = userRoomIds.includes(room.roomId);
+
+            // If user is not one of the 2 players who joined, show "room is full" message
+            if (!isUserInRoom) {
+                toast({
+                    title: "Room is Full",
+                    description: "This room already has 2 players",
+                    variant: "destructive",
+                });
+                return;
+            }
+        }
+
         // Check if user already joined this room
         const isUserInRoom = userRoomIds.includes(room.roomId);
         if (isUserInRoom) {
-            toast({
-                title: "Already Joined",
-                description: "You are already joined this room, waiting for other players to join this room",
-            });
+            // Check if still pending approval
+            const isPending = pendingJoinRooms.includes(room.roomId);
+            if (isPending) {
+                toast({
+                    title: "Request Pending",
+                    description: "Waiting for creator to accept your request",
+                    variant: "default",
+                });
+                return;
+            }
+
+            // Always fetch the latest room code before navigating
+            try {
+                const token = getAuthToken();
+                if (token) {
+                    const response = await apiService.getLudoRoomCode(token, room.roomId);
+                    if (response.success && response.data) {
+                        const data = response.data as any;
+                        room = {
+                            ...room,
+                            roomCode: data.ludoRoomCode,
+                            roomCreator: data.roomCreator
+                        };
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to fetch room code:', error);
+            }
+            // Navigate to the room code page
+            navigate('/room-code', { state: { room } });
             return;
         }
 
@@ -302,9 +355,12 @@ const ClassicLudo = () => {
 
             const response = await apiService.joinRoom(token, selectedRoom.roomId, ludoUsername.trim());
             if (response.success) {
+                // Add to pending join rooms
+                setPendingJoinRooms(prev => [...prev, selectedRoom.roomId]);
+
                 toast({
-                    title: "Battle Joined",
-                    description: `Successfully joined the battle`,
+                    title: "Join Request Sent",
+                    description: `Waiting for creator to accept your request`,
                 });
                 setLudoUsername('');
                 setShowJoinDialog(false);
@@ -330,11 +386,20 @@ const ClassicLudo = () => {
             const token = getAuthToken();
             if (!token) return;
 
-            const response = await apiService.getRoomCode(token, roomId);
+            const response = await apiService.getLudoRoomCode(token, roomId);
             if (response.success && response.data) {
                 const data = response.data as any;
-                setRoomCode(data.ludoRoomCode || 'N/A');
-                setShowRoomCodeDialog(true);
+                if (data.codeAvailable) {
+                    setRoomCode(data.ludoRoomCode || 'N/A');
+                    setSelectedRoom({ roomId } as Room); // Store for cancel functionality
+                    setShowRoomCodeDialog(true);
+                } else {
+                    toast({
+                        title: "Room Code Not Available",
+                        description: "The room creator hasn't provided the room code yet. Please wait.",
+                        variant: "destructive",
+                    });
+                }
             }
         } catch (error: any) {
             toast({
@@ -452,6 +517,11 @@ const ClassicLudo = () => {
 
             const response = await apiService.handleJoinRequest(token, roomId, userId, action);
             if (response.success) {
+                // Remove from pending join rooms when approved
+                if (action === 'approve') {
+                    setPendingJoinRooms(prev => prev.filter(id => id !== roomId));
+                }
+
                 toast({
                     title: action === 'approve' ? "Player Approved" : "Player Rejected",
                     description: response.message || `Player ${action}ed successfully`,
@@ -604,7 +674,7 @@ const ClassicLudo = () => {
 
                 {/* Create Username Dialog */}
                 <Dialog open={showUsernameDialog} onOpenChange={setShowUsernameDialog}>
-                    <DialogContent className="sm:max-w-md">
+                    <DialogContent className="sm:max-w-md bg-white z-[9999]">
                         <DialogHeader>
                             <DialogTitle>Enter Ludo King Username</DialogTitle>
                             <DialogDescription className="space-y-2">
@@ -618,19 +688,29 @@ const ClassicLudo = () => {
                             </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
-                            <Input
-                                placeholder="Enter Ludo King Username"
-                                value={ludoUsername}
-                                onChange={(e) => setLudoUsername(e.target.value)}
-                                className="w-full"
-                                autoFocus
-                            />
-                            <Input
-                                placeholder="Enter Ludo King Room Code"
-                                value={ludoRoomCode}
-                                onChange={(e) => setLudoRoomCode(e.target.value)}
-                                className="w-full"
-                            />
+                            <div>
+                                <label className="text-sm font-medium mb-2 block">
+                                    Ludo King Username <span className="text-red-500">*</span>
+                                </label>
+                                <Input
+                                    placeholder="Enter Ludo King Username"
+                                    value={ludoUsername}
+                                    onChange={(e) => setLudoUsername(e.target.value)}
+                                    className="w-full"
+                                    autoFocus
+                                />
+                            </div>
+                            {/* <div>
+                                <label className="text-sm font-medium mb-2 block">
+                                    Ludo King Room Code <span className="text-gray-500 text-xs">(Optional)</span>
+                                </label>
+                                <Input
+                                    placeholder="Enter Ludo King Room Code (Optional)"
+                                    value={ludoRoomCode}
+                                    onChange={(e) => setLudoRoomCode(e.target.value)}
+                                    className="w-full"
+                                />
+                            </div> */}
                             <div className="flex gap-2 justify-end">
                                 <Button
                                     variant="outline"
@@ -645,7 +725,7 @@ const ClassicLudo = () => {
                                 </Button>
                                 <Button
                                     onClick={handleConfirmCreateRoom}
-                                    disabled={createLoading || !ludoUsername.trim() || !ludoRoomCode.trim()}
+                                    disabled={createLoading || !ludoUsername.trim()}
                                     className="bg-green-600 hover:bg-green-700 text-white"
                                 >
                                     {createLoading ? 'Creating...' : 'Create Battle'}
@@ -710,7 +790,7 @@ const ClassicLudo = () => {
 
                 {/* Join Username Dialog */}
                 <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
-                    <DialogContent className="sm:max-w-md">
+                    <DialogContent className="sm:max-w-md bg-white z-[9999]">
                         <DialogHeader>
                             <DialogTitle>Enter Ludo King Username</DialogTitle>
                             <DialogDescription className="space-y-2">
@@ -809,64 +889,101 @@ const ClassicLudo = () => {
 
                 {/* Open Battles Section */}
                 <div className="mb-6">
-                    <div className="flex items-center mb-4">
-                        <X className="w-5 h-5 text-red-500 mr-2" />
-                        <h3 className="font-semibold text-gray-800">Open Battles</h3>
+                    <div className="flex items-center gap-2 mb-3">
+                        <div className="w-5 h-5 bg-red-600 rounded-full flex items-center justify-center">
+                            <X className="w-3 h-3 text-white" />
+                        </div>
+                        <h3 className="font-semibold text-sm text-gray-900">Open Battles</h3>
                     </div>
 
                     <div className="space-y-2">
-                        {openBattles.length === 0 ? (
-                            <div className="text-center text-gray-500 py-4">
+                        {dataLoading ? (
+                            <div className="text-center py-8 bg-white rounded-lg border border-gray-200">
+                                <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"></div>
+                                <p className="text-xs text-gray-600">Loading battles...</p>
+                            </div>
+                        ) : openBattles.length === 0 ? (
+                            <div className="text-center text-gray-500 py-6 bg-white rounded-lg border border-gray-200 text-xs">
                                 No open battles available. Create one!
                             </div>
                         ) : (
                             openBattles.map((battle) => {
-                                const prize = battle.betAmount * 1.90; // Winning amount (2 players × entry fee - 5% platform fee)
+                                const prize = battle.betAmount * 1.95;
                                 const isUserInRoom = userRoomIds.includes(battle.roomId);
+                                const isCreatedByUser = myCreatedRooms.includes(battle.roomId);
 
                                 return (
-                                    <div key={battle.roomId} className="rounded-lg p-2 border" style={{ backgroundColor: "rgba(223, 168, 255, 0.1)" }}>
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <div className="text-xs text-gray-600 mb-1">
-                                                    CHALLENGE FROM <span style={{ color: "rgb(223, 168, 255)", fontSize: "0.55em", fontWeight: "500" }}>{battle.createdBy}</span>
-                                                </div>
-                                                <div className="w-full h-px mb-1" style={{ backgroundColor: "rgb(223, 168, 255)" }}></div>
-                                                <div className="flex gap-4 mb-1">
-                                                    <div style={{ color: "rgb(223, 168, 255)", fontSize: "0.55em", fontWeight: "500", textTransform: "uppercase" }}>ENTRY FEE</div>
-                                                    <div style={{ color: "rgb(223, 168, 255)", fontSize: "0.55em", fontWeight: "500", textTransform: "uppercase" }}>Prize</div>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <div className="flex items-center">
-                                                        <img src={moneyIcon} alt="Money" className="w-4 h-4 mr-1" />
-                                                        <span className="text-sm font-semibold">{battle.betAmount}</span>
+                                    <div key={battle.roomId} className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+                                        <div className="mb-1.5 flex items-center justify-between">
+                                            <div className="text-[10px] font-semibold text-gray-900">
+                                                CHALLENGE FROM <span className="text-purple-400">{battle.createdBy?.toUpperCase() || 'PLAYER'}</span>
+                                            </div>
+                                            {isCreatedByUser && battle.playersCount === 1 && (
+                                                <button
+                                                    onClick={() => {
+                                                        setRoomToCancel(battle.roomId);
+                                                        setShowCancelDialog(true);
+                                                    }}
+                                                    disabled={cancellingRoom === battle.roomId}
+                                                    className="bg-red-300 hover:bg-red-400 text-white text-[9px] font-semibold px-2 h-5 rounded-none"
+                                                >
+                                                    {cancellingRoom === battle.roomId ? '...' : 'Cancel'}
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Divider Line */}
+                                        <div className="w-full h-px bg-purple-400 my-2"></div>
+
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-6">
+                                                <div>
+                                                    <div className="text-[9px] text-purple-400 font-medium uppercase mb-0.5">Entry Fee</div>
+                                                    <div className="flex items-center gap-1">
+                                                        <div className="w-4 h-4 bg-green-600 rounded flex items-center justify-center">
+                                                            <span className="text-white text-[8px] font-bold">₹</span>
+                                                        </div>
+                                                        <span className="text-base font-bold text-gray-900">{battle.betAmount}</span>
                                                     </div>
-                                                    <div className="flex items-center">
-                                                        <img src={moneyIcon} alt="Prize" className="w-4 h-4 mr-1" />
-                                                        <span className="text-sm font-semibold">{prize.toFixed(2)}</span>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[9px] text-purple-400 font-medium uppercase mb-0.5">Prize</div>
+                                                    <div className="flex items-center gap-1">
+                                                        <div className="w-4 h-4 bg-green-600 rounded flex items-center justify-center">
+                                                            <span className="text-white text-[8px] font-bold">₹</span>
+                                                        </div>
+                                                        <span className="text-base font-bold text-gray-900">{prize.toFixed(1)}</span>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="ml-4 mt-4 flex gap-2">
-                                                {myCreatedRooms.includes(battle.roomId) && battle.playersCount === 1 && (
+
+                                            <div className="flex gap-2">
+                                                {isUserInRoom && pendingJoinRooms.includes(battle.roomId) ? (
+                                                    <div className="bg-orange-500 text-white font-medium text-xs px-5 h-8 rounded-md flex items-center">
+                                                        Waiting...
+                                                    </div>
+                                                ) : isCreatedByUser && battle.playersCount === 1 ? (
+                                                    <div className="flex items-center gap-2 px-5 h-8">
+                                                        <div className="w-4 h-4 border-2 border-gray-400 border-t-blue-600 rounded-full animate-spin"></div>
+                                                        <span className="text-xs text-gray-600 font-medium">Waiting...</span>
+                                                    </div>
+                                                ) : battle.playersCount >= 2 && isUserInRoom ? (
                                                     <Button
-                                                        onClick={() => {
-                                                            setRoomToCancel(battle.roomId);
-                                                            setShowCancelDialog(true);
-                                                        }}
-                                                        disabled={cancellingRoom === battle.roomId}
-                                                        className="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1 h-6"
+                                                        onClick={() => handlePlayClick(battle)}
+                                                        disabled={loading}
+                                                        className="bg-green-600/70 hover:bg-green-600/90 text-white font-medium text-xs px-5 h-8 rounded-md"
                                                     >
-                                                        {cancellingRoom === battle.roomId ? 'Cancelling...' : 'Cancel'}
+                                                        See
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        onClick={() => handlePlayClick(battle)}
+                                                        disabled={loading}
+                                                        className="bg-gray-600/60 hover:bg-gray-600/80 text-white font-medium text-xs px-5 h-8 rounded-md"
+                                                    >
+                                                        Play
                                                     </Button>
                                                 )}
-                                                <Button
-                                                    onClick={() => isUserInRoom ? setShowWaitingDialog(true) : handlePlayClick(battle)}
-                                                    disabled={loading}
-                                                    className="bg-gray-600 hover:bg-gray-700 text-white text-xs px-4 py-1 h-6"
-                                                >
-                                                    Play
-                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -878,79 +995,75 @@ const ClassicLudo = () => {
 
                 {/* Running Battles Section */}
                 <div className="pb-6">
-                    <div className="flex items-center mb-4">
-                        <X className="w-5 h-5 text-red-500 mr-2" />
-                        <h3 className="font-semibold text-gray-800">Running Battles</h3>
+                    <div className="flex items-center gap-2 mb-3">
+                        <div className="w-5 h-5 bg-red-600 rounded-full flex items-center justify-center">
+                            <X className="w-3 h-3 text-white" />
+                        </div>
+                        <h3 className="font-semibold text-sm text-gray-900">Running Battles</h3>
                     </div>
 
                     <div className="space-y-2">
                         {runningBattles.length === 0 ? (
-                            <div className="text-center text-gray-500 py-4">
+                            <div className="text-center text-gray-500 py-6 bg-white rounded-lg border border-gray-200 text-xs">
                                 No running battles at the moment
                             </div>
                         ) : (
                             runningBattles.map((battle) => {
-                                const prize = battle.betAmount * 1.90; // Winning amount (2 players × entry fee - 5% platform fee)
+                                const prize = battle.betAmount * 1.95;
                                 const player1 = battle.players?.[0];
                                 const player2 = battle.players?.[1];
                                 const isUserInRoom = userRoomIds.includes(battle.roomId);
+                                const isSearching = battle.playersCount < 2;
 
                                 return (
-                                    <div key={battle.roomId} className="rounded-lg p-3 border mb-3" style={{ backgroundColor: "rgba(223, 168, 255, 0.1)" }}>
-                                        <div className="flex items-center justify-between mb-2 px-4">
-                                            <div className="text-xs text-gray-600">
-                                                PLAYING FOR <img src={moneyIcon} alt="Money" className="w-4 h-4 inline mx-1" />{battle.betAmount}
+                                    <div key={battle.roomId} className="bg-white rounded-lg p-3 border border-gray-200">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[10px] font-medium text-gray-700">Playing For</span>
+                                                <div className="w-4 h-4 bg-green-600 rounded flex items-center justify-center">
+                                                    <span className="text-white text-[8px] font-bold">₹</span>
+                                                </div>
+                                                <span className="text-xs font-bold text-gray-900">{battle.betAmount}</span>
                                             </div>
-                                            <div className="text-xs text-gray-600">
-                                                PRIZE <img src={moneyIcon} alt="Prize" className="w-4 h-4 inline mx-1" />{prize.toFixed(2)}
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[10px] font-medium text-gray-700">Prize</span>
+                                                <div className="w-4 h-4 bg-green-600 rounded flex items-center justify-center">
+                                                    <span className="text-white text-[8px] font-bold">₹</span>
+                                                </div>
+                                                <span className="text-xs font-bold text-gray-900">{prize.toFixed(1)}</span>
                                             </div>
                                         </div>
 
-                                        {/* Divider Line */}
-                                        <div className="w-full h-px mb-3" style={{ backgroundColor: "rgb(223, 168, 255)" }}></div>
-
-                                        <div className="flex items-center justify-between mb-3 px-2">
-                                            <div className="flex items-center">
-                                                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">
-                                                    👨
+                                        <div className="flex items-center justify-between py-2">
+                                            <div className="text-center flex-1">
+                                                <div className="w-12 h-12 mx-auto mb-1.5 bg-blue-100 rounded-full flex items-center justify-center">
+                                                    <span className="text-xl">👤</span>
                                                 </div>
-                                                <span className="text-xs font-semibold truncate max-w-16">
-                                                    {player1?.ludoUsername || 'Player 1'}
-                                                </span>
+                                                <p className="text-xs font-semibold text-gray-900">{player1?.ludoUsername || 'Player 1'}</p>
                                             </div>
 
-                                            <div className="flex items-center">
-                                                <img src={vsIcon} alt="VS" className="w-5 h-5" />
+                                            <div className="flex-shrink-0 mx-4">
+                                                <img src={vsIcon} alt="VS" className="w-10 h-10" />
                                             </div>
 
-                                            <div className="flex items-center">
-                                                <span className="text-xs font-semibold truncate max-w-16 mr-2">
-                                                    {player2?.ludoUsername || 'Player 2'}
-                                                </span>
-                                                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs">
-                                                    👨
-                                                </div>
+                                            <div className="text-center flex-1">
+                                                {isSearching ? (
+                                                    <div className="flex flex-col items-center">
+                                                        <div className="w-12 h-12 mx-auto mb-1.5 bg-gray-100 rounded-full flex items-center justify-center">
+                                                            <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                                                        </div>
+                                                        <p className="text-xs font-semibold text-gray-600">Searching...</p>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="w-12 h-12 mx-auto mb-1.5 bg-pink-100 rounded-full flex items-center justify-center">
+                                                            <span className="text-xl">👤</span>
+                                                        </div>
+                                                        <p className="text-xs font-semibold text-gray-900">{player2?.ludoUsername || 'Player 2'}</p>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
-
-                                        {isUserInRoom && (
-                                            <div className="flex justify-between gap-2 mt-3 pt-2 border-t px-2" style={{ borderColor: "rgb(223, 168, 255, 0.3)" }}>
-                                                <Button
-                                                    onClick={() => handleGetRoomCode(battle.roomId)}
-                                                    disabled={loadingRoomCode === battle.roomId}
-                                                    className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium px-3 py-1.5 h-7 rounded-md shadow-sm flex-1"
-                                                >
-                                                    {loadingRoomCode === battle.roomId ? 'Loading...' : 'Get Room Code'}
-                                                </Button>
-                                                <Button
-                                                    onClick={() => handleDeclareResult(battle)}
-                                                    disabled={loadingDeclareResult === battle.roomId}
-                                                    className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 h-7 rounded-md shadow-sm flex-1"
-                                                >
-                                                    {loadingDeclareResult === battle.roomId ? 'Checking...' : 'Declare Result'}
-                                                </Button>
-                                            </div>
-                                        )}
 
                                     </div>
                                 );
@@ -974,8 +1087,24 @@ const ClassicLudo = () => {
                             {roomCode}
                         </div>
                     </div>
-                    <div className="flex justify-end">
-                        <Button onClick={() => setShowRoomCodeDialog(false)}>
+                    <div className="flex gap-2 justify-end">
+                        <Button
+                            variant="destructive"
+                            onClick={() => {
+                                if (selectedRoom) {
+                                    setRoomToCancel(selectedRoom.roomId);
+                                    setShowCancelDialog(true);
+                                    setShowRoomCodeDialog(false);
+                                }
+                            }}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={() => {
+                            setShowRoomCodeDialog(false);
+                            setSelectedRoom(null);
+                        }}>
                             Close
                         </Button>
                     </div>
@@ -1115,61 +1244,72 @@ const ClassicLudo = () => {
             </Dialog>
 
             {/* Cancel Room Dialog */}
-            <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-                <DialogContent className="bg-white text-black border-gray-300 shadow-xl">
+            <Dialog open={showCancelDialog} onOpenChange={(open) => {
+                setShowCancelDialog(open);
+                if (!open) {
+                    setRoomToCancel(null);
+                }
+            }}>
+                <DialogContent className="bg-white text-black border-gray-300 shadow-xl max-w-md !fixed !top-auto !bottom-4 !left-[50%] !translate-x-[-50%] !translate-y-0 !z-[9999] rounded-t-2xl">
                     <DialogHeader>
-                        <DialogTitle className="text-xl font-bold text-black">Request Cancellation</DialogTitle>
-                        <DialogDescription className="text-gray-700">
-                            Request mutual cancellation of this room. Both players must agree for the refund to process.
+                        <DialogTitle className="text-lg font-bold text-black text-center">
+                            Cancel Room
+                        </DialogTitle>
+                        <DialogDescription className="text-center text-gray-600">
+                            Are you sure you want to cancel this room?
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-sm text-gray-700 mb-2 block">
-                                Reason for cancellation (Optional)
-                            </label>
-                            <Textarea
-                                value={cancelReason}
-                                onChange={(e) => setCancelReason(e.target.value)}
-                                placeholder="Enter reason for cancellation..."
-                                className="bg-gray-100 border border-gray-300 text-black placeholder:text-gray-500 focus:ring-2 focus:ring-gray-400"
-                                rows={3}
-                            />
-                        </div>
+                    <div className="space-y-3 py-2">
+                        <Button
+                            onClick={async () => {
+                                if (!roomToCancel) return;
 
-                        <div className="flex gap-2 justify-end">
-                            <Button
-                                variant="outline"
-                                onClick={() => {
+                                try {
+                                    setCancellingRoom(roomToCancel);
+                                    const token = getAuthToken();
+                                    if (!token) {
+                                        toast({
+                                            title: "Error",
+                                            description: "Authentication required",
+                                            variant: "destructive",
+                                        });
+                                        return;
+                                    }
+
+                                    await apiService.cancelRoom(token, roomToCancel);
+
+                                    toast({
+                                        title: "Room Cancelled",
+                                        description: "The room has been cancelled successfully",
+                                    });
+
                                     setShowCancelDialog(false);
-                                    setCancelReason('');
-                                    setRoomToCancel(null);
-                                }}
-                                disabled={cancellingRoom !== null}
-                                className="border-gray-400 text-black hover:bg-gray-100"
-                            >
-                                Close
-                            </Button>
-                            <Button
-                                variant="destructive"
-                                onClick={async () => {
-                                    if (!roomToCancel) return;
-                                    await handleRequestMutualCancellation(roomToCancel);
-                                    setShowCancelDialog(false);
-                                    setCancelReason('');
                                     setRoomToCancel(null);
                                     setShowClaimDialog(false);
                                     setSelectedClaimRoom(null);
                                     setClaimUsername('');
                                     setScreenshot(null);
-                                }}
-                                disabled={cancellingRoom !== null}
-                                className="bg-red-600 hover:bg-red-700 text-white"
-                            >
-                                {cancellingRoom ? 'Requesting...' : 'Request Cancellation'}
-                            </Button>
-                        </div>
+
+                                    await fetchRooms();
+                                    await fetchUserRooms();
+                                    await refetchWallet();
+                                } catch (error: any) {
+                                    console.error('Cancel room error:', error);
+                                    toast({
+                                        title: "Error",
+                                        description: error.message || "Failed to cancel room",
+                                        variant: "destructive",
+                                    });
+                                } finally {
+                                    setCancellingRoom(null);
+                                }
+                            }}
+                            disabled={cancellingRoom !== null}
+                            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 text-base"
+                        >
+                            {cancellingRoom ? 'Cancelling...' : 'Confirm Cancel'}
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

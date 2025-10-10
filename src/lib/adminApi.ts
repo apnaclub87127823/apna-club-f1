@@ -41,7 +41,7 @@ interface RoomData {
     _id: string;
     roomId: string;
     betAmount: number;
-    status: 'pending' | 'live' | 'ended' | 'finished';
+    status: 'pending' | 'live' | 'ended' | 'finished' | 'cancelled';
     createdBy: {
         _id: string;
         fullName: string;
@@ -82,6 +82,7 @@ interface RoomData {
 interface DisputeData {
     disputeId: string;
     roomId: string;
+    ludoRoomCode?: string;
     claimType: 'win' | 'loss';
     claimedBy: {
         id: string;
@@ -206,7 +207,7 @@ class AdminApiService {
     // Get all rooms
     async getAllRooms(
         token: string,
-        status?: 'pending' | 'live' | 'ended' | 'finished',
+        status?: 'pending' | 'live' | 'ended' | 'finished' | 'cancelled',
         page = 1,
         limit = 10
     ): Promise<{
@@ -222,12 +223,37 @@ class AdminApiService {
             ...(status && { status }),
         });
 
-        const response = await this.request<RoomData[]>(`/api/admin/rooms?${params}`, token, {
-            method: 'GET',
-        });
+        const url = `${this.baseURL}/api/admin/rooms?${params}`;
 
-        // API returns data as array directly with pagination at root
-        return response as any;
+        const config: RequestInit = {
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            method: 'GET',
+        };
+
+        try {
+            const response = await fetch(url, config);
+            const data = await response.json();
+
+            if (!response.ok) {
+                const errorMessage = data.message || `Request failed with status ${response.status}`;
+                throw new Error(errorMessage);
+            }
+
+            // Backend returns: { success, data: [...], totalPages, currentPage, totalRooms }
+            return {
+                success: data.success,
+                data: data.data || [],
+                totalPages: data.totalPages || 1,
+                currentPage: data.currentPage || page,
+                totalRooms: data.totalRooms || 0
+            };
+        } catch (error) {
+            console.error('Get all rooms error:', error);
+            throw error;
+        }
     }
 
     // Provide Ludo room code
@@ -332,6 +358,39 @@ class AdminApiService {
         });
     }
 
+    // Get all users with wallet information
+    async getAllUsersWithWallet(
+        token: string,
+        page = 1,
+        limit = 10,
+        search?: string
+    ): Promise<ApiResponse<{
+        users: Array<{
+            _id: string;
+            fullName: string;
+            username: string;
+            mobileNumber: string;
+            wallet: {
+                depositBalance: number;
+                winningBalance: number;
+                totalBalance: number;
+            };
+        }>;
+        totalPages: number;
+        currentPage: number;
+        totalUsers: number;
+    }>> {
+        const params = new URLSearchParams({
+            page: page.toString(),
+            limit: limit.toString(),
+            ...(search && { search }),
+        });
+
+        return this.request(`/api/admin/users-with-wallet?${params}`, token, {
+            method: 'GET',
+        });
+    }
+
     // Add deposit funds to user
     async addDepositFundsToUser(
         token: string,
@@ -345,6 +404,73 @@ class AdminApiService {
         return this.request('/api/admin/add-deposit-funds', token, {
             method: 'POST',
             body: JSON.stringify({ userId, amount }),
+        });
+    }
+
+    // Update user balance (deduct or set to zero)
+    async updateUserBalance(
+        token: string,
+        userId: string,
+        depositDeductAmount?: number,
+        winningDeductAmount?: number,
+        setDepositToZero?: boolean,
+        setWinningToZero?: boolean
+    ): Promise<ApiResponse<{
+        userId: string;
+        newDepositBalance: number;
+        newWinningBalance: number;
+        newTotalBalance: number;
+        changes: Array<{
+            type: 'deposit' | 'winning';
+            action: 'deduction' | 'set_to_zero';
+            amount: number;
+        }>;
+    }>> {
+        return this.request('/api/admin/update-user-balance', token, {
+            method: 'POST',
+            body: JSON.stringify({
+                userId,
+                depositDeductAmount,
+                winningDeductAmount,
+                setDepositToZero,
+                setWinningToZero
+            }),
+        });
+    }
+
+    // Admin cancel room
+    async adminCancelRoom(
+        token: string,
+        roomId: string,
+        reason?: string
+    ): Promise<ApiResponse<{
+        roomId: string;
+        refundedPlayers: Array<{
+            userId: string;
+            amount: number;
+        }>;
+        cancellationReason: string;
+    }>> {
+        return this.request(`/api/admin/rooms/${roomId}`, token, {
+            method: 'DELETE',
+            body: JSON.stringify({ reason }),
+        });
+    }
+
+    // Update room status
+    async updateRoomStatus(
+        token: string,
+        roomId: string,
+        newStatus: 'pending' | 'live' | 'ended' | 'finished' | 'cancelled'
+    ): Promise<ApiResponse<{
+        roomId: string;
+        newStatus: string;
+        gameStartedAt?: string;
+        gameEndedAt?: string;
+    }>> {
+        return this.request(`/api/admin/rooms/${roomId}/status`, token, {
+            method: 'PUT',
+            body: JSON.stringify({ newStatus }),
         });
     }
 }

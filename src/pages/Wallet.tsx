@@ -74,7 +74,7 @@ const Wallet = () => {
                                 Winning
                             </span>
                         </div>
-                        <p className="text-xs text-muted-foreground mb-0.5">Earnings</p>
+                        <p className="text-xs text-muted-foreground mb-0.5">Winning</p>
                         <p className="text-lg font-bold text-foreground">
                             ₹{loading ? '...' : wallet.winningBalance}
                         </p>
