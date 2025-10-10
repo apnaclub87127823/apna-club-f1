@@ -56,6 +56,7 @@ const RoomCode = () => {
     const [submittingRoomCode, setSubmittingRoomCode] = useState(false);
     const [timeRemaining, setTimeRemaining] = useState(180); // 3 minutes in seconds
     const timerStartedRef = useRef(false);
+    const autoCancelledRef = useRef(false);
 
     // Timer effect - runs only once
     useEffect(() => {
@@ -75,6 +76,57 @@ const RoomCode = () => {
             return () => clearInterval(timerInterval);
         }
     }, [room]);
+
+    // Check room creation time and auto-cancel if needed
+    useEffect(() => {
+        if (!room || room.roomCode || autoCancelledRef.current) return;
+
+        const checkAndCancelRoom = async () => {
+            try {
+                const token = getAuthToken();
+                if (!token) return;
+
+                // Fetch latest room data to get creation time
+                const response = await apiService.getUserRooms(token);
+                if (response.success && response.data) {
+                    const rooms = response.data as any[];
+                    const currentRoom = rooms.find((r: any) => r.roomId === room.roomId);
+
+                    if (currentRoom && !currentRoom.roomCode) {
+                        // Get room creation time from players array
+                        const creationTime = currentRoom.players?.[0]?.joinedAt;
+                        if (creationTime) {
+                            const createdAt = new Date(creationTime).getTime();
+                            const now = new Date().getTime();
+                            const minutesPassed = (now - createdAt) / (1000 * 60);
+
+                            // If more than 3 minutes passed, cancel the room
+                            if (minutesPassed >= 3) {
+                                autoCancelledRef.current = true;
+                                await apiService.cancelRoom(token, room.roomId, 'Room code not provided within 3 minutes');
+
+                                toast({
+                                    title: "Room Cancelled",
+                                    description: "Room was automatically cancelled because room code was not provided within 3 minutes",
+                                    variant: "destructive",
+                                });
+
+                                navigate('/classic-ludo');
+                            }
+                        }
+                    }
+                }
+            } catch (error: any) {
+                console.error('Auto-cancel check failed:', error);
+            }
+        };
+
+        // Check immediately and then every 10 seconds
+        checkAndCancelRoom();
+        const interval = setInterval(checkAndCancelRoom, 10000);
+
+        return () => clearInterval(interval);
+    }, [room, navigate, toast]);
 
     useEffect(() => {
         if (!isAuthenticated) {
