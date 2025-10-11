@@ -750,16 +750,16 @@ const ClassicLudo = () => {
                                 />
                             </div>
                             {/* <div>
-                                <label className="text-sm font-medium mb-2 block">
-                                    Ludo King Room Code <span className="text-gray-500 text-xs">(Optional)</span>
-                                </label>
-                                <Input
-                                    placeholder="Enter Ludo King Room Code (Optional)"
-                                    value={ludoRoomCode}
-                                    onChange={(e) => setLudoRoomCode(e.target.value)}
-                                    className="w-full"
-                                />
-                            </div> */}
+                            <label className="text-sm font-medium mb-2 block">
+                                Ludo King Room Code <span className="text-gray-500 text-xs">(Optional)</span>
+                            </label>
+                            <Input
+                                placeholder="Enter Ludo King Room Code (Optional)"
+                                value={ludoRoomCode}
+                                onChange={(e) => setLudoRoomCode(e.target.value)}
+                                className="w-full"
+                            />
+                        </div> */}
                             <div className="flex gap-2 justify-end">
                                 <Button
                                     variant="outline"
@@ -778,6 +778,58 @@ const ClassicLudo = () => {
                                     className="bg-green-600 hover:bg-green-700 text-white"
                                 >
                                     {createLoading ? 'Creating...' : 'Create Battle'}
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Join Battle Dialog */}
+                <Dialog open={showJoinDialog} onOpenChange={setShowJoinDialog}>
+                    <DialogContent className="sm:max-w-md bg-white z-[9999]">
+                        <DialogHeader>
+                            <DialogTitle>Join Battle</DialogTitle>
+                            <DialogDescription className="space-y-2">
+                                <p>Please enter your Ludo King username to join this battle.</p>
+                                <p className="text-red-600 font-semibold text-sm">
+                                    ⚠️ चेतावनी: यदि आप गलत यूजरनेम भरते हैं तो आपको जीत की राशि नहीं मिलेगी।
+                                </p>
+                                <p className="text-red-600 font-semibold text-sm">
+                                    (Warning: If you enter wrong username, you will not receive winning money)
+                                </p>
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm font-medium mb-2 block">
+                                    Ludo King Username <span className="text-red-500">*</span>
+                                </label>
+                                <Input
+                                    placeholder="Enter Ludo King Username"
+                                    value={ludoUsername}
+                                    onChange={(e) => setLudoUsername(e.target.value)}
+                                    className="w-full"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setShowJoinDialog(false);
+                                        setLudoUsername('');
+                                        setSelectedRoom(null);
+                                    }}
+                                    disabled={loading}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleConfirmJoinRoom}
+                                    disabled={loading || !ludoUsername.trim()}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                    {loading ? 'Joining...' : 'Join Battle'}
                                 </Button>
                             </div>
                         </div>
