@@ -152,7 +152,7 @@ const DepositMoney = () => {
             }
 
             // For amounts > 500, only send WhatsApp message (no payment API)
-            if (validatedData.amount > 500 && profile) {
+            if (validatedData.amount > 1 && profile) {
                 const adminNumber = '917014079906'; // +91 70140 79906
                 const message = `My name is ${profile.fullName} and mobile number is ${profile.mobileNumber}. I want to add ₹${validatedData.amount} in this number.`;
                 const whatsappUrl = `https://wa.me/${adminNumber}?text=${encodeURIComponent(message)}`;
@@ -382,3 +382,5 @@ const DepositMoney = () => {
 };
 
 export default DepositMoney;
+
+// 500
