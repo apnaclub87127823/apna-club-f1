@@ -36,6 +36,7 @@ interface Room {
         username: string;
     };
     players?: Array<{
+        _id?: string;
         fullName: string;
         ludoUsername: string;
         joinedAt: string;
@@ -59,7 +60,7 @@ interface PendingRequest {
 
 const ClassicLudo = () => {
     const navigate = useNavigate();
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     const { toast } = useToast();
     const { wallet, refetch: refetchWallet } = useWallet();
     const { profile } = useProfile();
@@ -903,12 +904,32 @@ const ClassicLudo = () => {
                                 <div className="w-10 h-10 border-4 border-gray-300 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"></div>
                                 <p className="text-xs text-gray-600">Loading battles...</p>
                             </div>
-                        ) : openBattles.length === 0 ? (
+                        ) : openBattles.filter(battle => {
+                            // Only show live rooms where user has already joined
+                            if (battle.status === 'live') {
+                                // Check if user is in the room by checking userRoomIds AND players array
+                                const isInRoomIds = userRoomIds.includes(battle.roomId);
+                                const isInPlayers = battle.players?.some(p => p._id === user?.id);
+                                return isInRoomIds && isInPlayers;
+                            }
+                            // Show all pending rooms
+                            return battle.status === 'pending';
+                        }).length === 0 ? (
                             <div className="text-center text-gray-500 py-6 bg-white rounded-lg border border-gray-200 text-xs">
                                 No open battles available. Create one!
                             </div>
                         ) : (
-                            openBattles.map((battle) => {
+                            openBattles.filter(battle => {
+                                // Only show live rooms where user has already joined
+                                if (battle.status === 'live') {
+                                    // Check if user is in the room by checking userRoomIds AND players array
+                                    const isInRoomIds = userRoomIds.includes(battle.roomId);
+                                    const isInPlayers = battle.players?.some(p => p._id === user?.id);
+                                    return isInRoomIds && isInPlayers;
+                                }
+                                // Show all pending rooms
+                                return battle.status === 'pending';
+                            }).map((battle) => {
                                 const prize = battle.betAmount * 1.95;
                                 const isUserInRoom = userRoomIds.includes(battle.roomId);
                                 const isCreatedByUser = myCreatedRooms.includes(battle.roomId);
