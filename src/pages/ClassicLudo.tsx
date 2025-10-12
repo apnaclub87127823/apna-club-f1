@@ -24,7 +24,7 @@ import moneyIcon from '@/assets/money-icon.png';
 interface Room {
     roomId: string;
     betAmount: number;
-    status: string;
+    status: 'pending' | 'live' | 'ended' | 'finished' | 'cancelled';
     playersCount: number;
     maxPlayers: number;
     createdBy: string;
@@ -98,6 +98,7 @@ const ClassicLudo = () => {
     const [roomToCancel, setRoomToCancel] = useState<string | null>(null);
     const [pendingJoinRooms, setPendingJoinRooms] = useState<string[]>([]);
     const autoCancelledRoomsRef = useRef<Set<string>>(new Set());
+    const hasLoadedRef = useRef(false);
 
     // Fetch rooms on mount and periodically
     useEffect(() => {
@@ -109,7 +110,7 @@ const ClassicLudo = () => {
                 fetchRooms();
                 fetchUserRooms();
                 fetchPendingRequests();
-            }, 10000); // Refresh every 10 seconds
+            }, 5000); // Refresh every 5 seconds
             return () => clearInterval(interval);
         }
     }, [isAuthenticated, profile?.fullName]); // Re-fetch when profile loads
@@ -159,9 +160,9 @@ const ClassicLudo = () => {
             }
         };
 
-        // Check immediately and then every 10 seconds
+        // Check immediately and then every 5 seconds
         checkAndCancelRooms();
-        const interval = setInterval(checkAndCancelRooms, 10000);
+        const interval = setInterval(checkAndCancelRooms, 5000);
 
         return () => clearInterval(interval);
     }, [myCreatedRooms, openBattles, isAuthenticated, toast]);
@@ -204,7 +205,9 @@ const ClassicLudo = () => {
             const token = getAuthToken();
             if (!token) return;
 
-            setDataLoading(true);
+            if (!hasLoadedRef.current) {
+                setDataLoading(true);
+            }
             // Fetch pending and live rooms (for Open Battles)
             const pendingResponse = await apiService.getAllRooms(token, 'pending', 1, 20);
             const liveResponse = await apiService.getAllRooms(token, 'live', 1, 20);
@@ -219,12 +222,13 @@ const ClassicLudo = () => {
             // Combine pending and live for Open Battles
             setOpenBattles([...pendingRooms, ...liveRooms]);
 
-            // Fetch ended rooms (for Running Battles) - now show live battles here
+            // Show live battles in Running Battles
             setRunningBattles(liveRooms);
         } catch (error) {
             console.error('Failed to fetch rooms:', error);
         } finally {
             setDataLoading(false);
+            hasLoadedRef.current = true;
         }
     };
 
@@ -980,16 +984,25 @@ const ClassicLudo = () => {
                                             </div>
 
                                             <div className="flex gap-2">
-                                                {isUserInRoom && pendingJoinRooms.includes(battle.roomId) ? (
+                                                {/* If room is live and user is a player, show "See" button */}
+                                                {battle.status === 'live' && isUserInRoom ? (
+                                                    <Button
+                                                        onClick={() => handlePlayClick(battle)}
+                                                        disabled={loading}
+                                                        className="bg-green-600/70 hover:bg-green-600/90 text-white font-medium text-xs px-5 h-8 rounded-md"
+                                                    >
+                                                        See
+                                                    </Button>
+                                                ) : isUserInRoom && pendingJoinRooms.includes(battle.roomId) && battle.status === 'pending' ? (
                                                     <div className="bg-orange-500 text-white font-medium text-xs px-5 h-8 rounded-md flex items-center">
                                                         Waiting...
                                                     </div>
-                                                ) : isCreatedByUser && battle.playersCount === 1 ? (
+                                                ) : isCreatedByUser && battle.playersCount === 1 && battle.status === 'pending' ? (
                                                     <div className="flex items-center gap-2 px-5 h-8">
                                                         <div className="w-4 h-4 border-2 border-gray-400 border-t-blue-600 rounded-full animate-spin"></div>
                                                         <span className="text-xs text-gray-600 font-medium">Waiting...</span>
                                                     </div>
-                                                ) : battle.playersCount >= 2 && isUserInRoom ? (
+                                                ) : battle.playersCount >= 2 && isUserInRoom && battle.status === 'pending' ? (
                                                     <Button
                                                         onClick={() => handlePlayClick(battle)}
                                                         disabled={loading}
