@@ -115,6 +115,21 @@ const ClassicLudo = () => {
         }
     }, [isAuthenticated, profile?.fullName]); // Re-fetch when profile loads
 
+    // Auto-cleanup pendingJoinRooms when rooms become live
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        // Find rooms that are now 'live' and user is in them
+        const liveRoomIds = openBattles
+            .filter(r => r.status === 'live' && userRoomIds.includes(r.roomId))
+            .map(r => r.roomId);
+
+        // Remove these rooms from pendingJoinRooms
+        setPendingJoinRooms(prev =>
+            prev.filter(roomId => !liveRoomIds.includes(roomId))
+        );
+    }, [openBattles, userRoomIds, isAuthenticated]);
+
     // Check and auto-cancel rooms based on creation time
     useEffect(() => {
         if (!isAuthenticated || myCreatedRooms.length === 0) return;
@@ -343,9 +358,32 @@ const ClassicLudo = () => {
         // Check if user already joined this room
         const isUserInRoom = userRoomIds.includes(room.roomId);
         if (isUserInRoom) {
-            // Check if still pending approval
-            const isPending = pendingJoinRooms.includes(room.roomId);
-            if (isPending) {
+            // If room is 'live', user has been accepted - navigate to room code
+            if (room.status === 'live') {
+                // Always fetch the latest room code before navigating
+                try {
+                    const token = getAuthToken();
+                    if (token) {
+                        const response = await apiService.getLudoRoomCode(token, room.roomId);
+                        if (response.success && response.data) {
+                            const data = response.data as any;
+                            room = {
+                                ...room,
+                                roomCode: data.ludoRoomCode,
+                                roomCreator: data.roomCreator
+                            };
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch room code:', error);
+                }
+                // Navigate to the room code page
+                navigate('/room-code', { state: { room } });
+                return;
+            }
+
+            // If room is still 'pending', user is waiting for approval
+            if (room.status === 'pending') {
                 toast({
                     title: "Request Pending",
                     description: "Waiting for creator to accept your request",
@@ -353,27 +391,6 @@ const ClassicLudo = () => {
                 });
                 return;
             }
-
-            // Always fetch the latest room code before navigating
-            try {
-                const token = getAuthToken();
-                if (token) {
-                    const response = await apiService.getLudoRoomCode(token, room.roomId);
-                    if (response.success && response.data) {
-                        const data = response.data as any;
-                        room = {
-                            ...room,
-                            roomCode: data.ludoRoomCode,
-                            roomCreator: data.roomCreator
-                        };
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to fetch room code:', error);
-            }
-            // Navigate to the room code page
-            navigate('/room-code', { state: { room } });
-            return;
         }
 
         if (wallet.totalBalance < room.betAmount) {
