@@ -224,16 +224,6 @@ const ClassicLudo = () => {
 
             // Show live battles in Running Battles
             setRunningBattles(liveRooms);
-
-            // Clear pending join rooms for any rooms that are now live or full
-            setPendingJoinRooms(prev => {
-                const allRooms = [...pendingRooms, ...liveRooms];
-                return prev.filter(roomId => {
-                    const room = allRooms.find(r => r.roomId === roomId);
-                    // Remove from pending if room is live or has 2 players
-                    return room && room.status === 'pending' && room.playersCount < 2;
-                });
-            });
         } catch (error) {
             console.error('Failed to fetch rooms:', error);
         } finally {
@@ -1003,15 +993,7 @@ const ClassicLudo = () => {
                                                     >
                                                         See
                                                     </Button>
-                                                ) : isUserInRoom && battle.playersCount >= 2 && battle.status === 'pending' ? (
-                                                    <Button
-                                                        onClick={() => handlePlayClick(battle)}
-                                                        disabled={loading}
-                                                        className="bg-green-600/70 hover:bg-green-600/90 text-white font-medium text-xs px-5 h-8 rounded-md"
-                                                    >
-                                                        See
-                                                    </Button>
-                                                ) : isUserInRoom && battle.status === 'pending' ? (
+                                                ) : isUserInRoom && pendingJoinRooms.includes(battle.roomId) && battle.status === 'pending' ? (
                                                     <div className="bg-orange-500 text-white font-medium text-xs px-5 h-8 rounded-md flex items-center">
                                                         Waiting...
                                                     </div>
@@ -1020,6 +1002,14 @@ const ClassicLudo = () => {
                                                         <div className="w-4 h-4 border-2 border-gray-400 border-t-blue-600 rounded-full animate-spin"></div>
                                                         <span className="text-xs text-gray-600 font-medium">Waiting...</span>
                                                     </div>
+                                                ) : battle.playersCount >= 2 && isUserInRoom && battle.status === 'pending' ? (
+                                                    <Button
+                                                        onClick={() => handlePlayClick(battle)}
+                                                        disabled={loading}
+                                                        className="bg-green-600/70 hover:bg-green-600/90 text-white font-medium text-xs px-5 h-8 rounded-md"
+                                                    >
+                                                        See
+                                                    </Button>
                                                 ) : (
                                                     <Button
                                                         onClick={() => handlePlayClick(battle)}
