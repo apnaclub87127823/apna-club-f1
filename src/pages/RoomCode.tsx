@@ -581,7 +581,50 @@ const RoomCode = () => {
                                         If you are not playing the game or the game has not started within 2 minutes, please select cancel with appropriate reason and submit the result.
                                     </p>
                                     <button
-                                        onClick={() => setShowCancelDialog(true)}
+                                        onClick={async () => {
+                                            if (room.roomCode) {
+                                                // Room code exists, request mutual cancellation
+                                                setShowCancelDialog(true);
+                                            } else {
+                                                // No room code, direct cancel
+                                                setCancellingRoom(room.roomId);
+                                                try {
+                                                    const token = getAuthToken();
+                                                    if (!token) {
+                                                        toast({
+                                                            title: "Authentication Required",
+                                                            description: "Please login to continue",
+                                                            variant: "destructive",
+                                                        });
+                                                        return;
+                                                    }
+
+                                                    const response = await apiService.cancelRoom(token, room.roomId, 'Room cancelled by user');
+
+                                                    if (response.success) {
+                                                        toast({
+                                                            title: "Room Cancelled",
+                                                            description: "Room has been cancelled successfully",
+                                                        });
+                                                        navigate('/classic-ludo');
+                                                    } else {
+                                                        toast({
+                                                            title: "Error",
+                                                            description: response.message || "Failed to cancel room",
+                                                            variant: "destructive",
+                                                        });
+                                                    }
+                                                } catch (error: any) {
+                                                    toast({
+                                                        title: "Error",
+                                                        description: error.message || "Failed to cancel room",
+                                                        variant: "destructive",
+                                                    });
+                                                } finally {
+                                                    setCancellingRoom(null);
+                                                }
+                                            }
+                                        }}
                                         disabled={cancellingRoom === room.roomId}
                                         className="w-full border border-gray-900 bg-white text-gray-900 font-bold py-2.5 text-sm rounded"
                                     >
