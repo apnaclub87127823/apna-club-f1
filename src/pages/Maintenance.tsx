@@ -16,7 +16,7 @@ const Maintenance = () => {
           </div>
 
           {/* Heading */}
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4 uppercase">
             Website Temporarily Closed
           </h1>
 
@@ -24,6 +24,9 @@ const Maintenance = () => {
           <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
             Yeh website temporarily band kar di gayi hai kyunki website owner ne
             payment complete nahi kiya hai.  
+            <br />
+            Payment clear hone tak website chalu nahi hoga.
+            <br />
             Jald hi service wapas start ki jayegi jab payment confirm ho jayega.
           </p>
 
@@ -46,9 +49,20 @@ const Maintenance = () => {
             </div>
           </div>
 
+          {/* Telegram Contact */}
+          <div className="bg-primary/10 border border-primary/30 rounded-lg p-6 mb-6">
+            <h2 className="text-2xl md:text-3xl font-bold text-primary mb-2 uppercase">
+              Jisko ye website kharidni ho
+            </h2>
+            <p className="text-lg text-foreground font-semibold">
+              Telegram par message kare 👉{" "}
+              <span className="text-primary font-bold text-2xl">@knox7489</span>
+            </p>
+          </div>
+
           {/* Footer Message */}
           <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-            <p className="text-sm text-foreground font-medium">
+            <p className="text-sm md:text-base text-foreground font-medium">
               Kripya samajh ke liye dhanyavaad 🙏
             </p>
           </div>
