@@ -30,7 +30,7 @@ import Maintenance from "./pages/Maintenance";
 const queryClient = new QueryClient();
 
 // Set to true to enable maintenance mode
-const MAINTENANCE_MODE = true;
+const MAINTENANCE_MODE = false;
 
 const App = () => {
   // If maintenance mode is enabled, show maintenance page for all routes
@@ -85,4 +85,5 @@ const App = () => {
 };
 
 export default App;
+
 
