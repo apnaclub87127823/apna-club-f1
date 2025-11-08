@@ -53,9 +53,9 @@ const App = () => {
         <Sonner />
         <BrowserRouter>
           <AuthProvider>
-            <WhatsAppFloatingButton />
+            {/* <WhatsAppFloatingButton /> */}
             <Routes>
-              <Route path="/" element={<Index />} />
+              {/* <Route path="/" element={<Index />} />
               <Route path="/refer-earn" element={<ReferEarn />} />
               <Route path="/login" element={<Login />} />
               <Route path="/otp-verify" element={<OtpVerify />} />
@@ -75,7 +75,7 @@ const App = () => {
               <Route path="/admin/rooms" element={<AdminRooms />} />
               <Route path="/game-history" element={<GameHistory />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
+              <Route path="*" element={<NotFound />} /> */}
             </Routes>
           </AuthProvider>
         </BrowserRouter>
@@ -85,5 +85,6 @@ const App = () => {
 };
 
 export default App;
+
 
 
